@@ -14,6 +14,7 @@
 #' ---
 #+ init, echo=FALSE, message=FALSE, warning=FALSE,results='hide'
 # Init ----
+debug <- 0;
 knitr::opts_chunk$set(echo=debug>0, warning=debug>0, message=debug>0);
 #' # Load libraries
 library('dplyr');
@@ -22,7 +23,6 @@ library('synthpop');
 # can be obtained via devtools::install_github('bokov/tidbits',ref='integration')
 library('tidbits');
 #' # Config
-debug <- 0;
 source('config.R');
 inputdata <- c(orig0='/tmp/SDOH_ZCTA_2013.xlsx'
                ,cx0='/tmp/mozilla_a0/ALLCMSv4.csv'
@@ -56,13 +56,13 @@ sim1 <- arrange(sim0$syn,STATE) %>%
          ,RSA=CN
          ,Quartile=as.character(Quartile));
 #' ## Simulated, RSA-indexed outcomes
-rsascramble <- cbind(LETTERS[-24],sample(LETTERS[-24],25));
-cx1 <- mutate(cx0,CN=submulti(CN,rsascramble,method='starts'));
+rsascramble <- paste0(sample(LETTERS[-24],25),collapse='');
+cx1 <- mutate(cx0,CN=chartr(CN,paste0(LETTERS[-24],collapse=''),rsascramble));
 rsa1 <- rename(sim1,RSA=CN) %>% group_by(RSA) %>%
   summarise(RSR=mean(RSR,na.rm=T)) %>%
   mutate(Quartile=cut(RSR,breaks=c(0,quantile(RSR,c(.25,.5,.75),na.rm=T),Inf)
                       ,labels=c('Q1','Q2','Q3','Q4')) %>% as.character
-         ,RSA = submulti(RSA,rsascramble,method='starts')) %>%
+         ,RSA = chartr(RSA,paste0(LETTERS[-24],collapse=''),rsascramble)) %>%
   na.omit %>% select(names(rsa0));
 
 #' # Export data
