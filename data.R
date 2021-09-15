@@ -63,11 +63,13 @@ namesd1missing <- names(d1missing[d1missing>0]);
 #' # Variable Selection
 #'
 #' ## Method: permutation (Boruta w/ Random Forests) (http://www.jstatsoft.org/v36/i11/)
-#+ borutaplot, fig.height=9, cache=TRUE
+#+ borutaplot, fig.height=10, cache=TRUE
 d1boruta0 <- Boruta(RSR ~ ., data=select(dat1,-all_of(namesd1missing)));
 d1boruta1 <- TentativeRoughFix(d1boruta0);
-plot(d1boruta1, las=2,xlab="",ylab="", cex.axis=0.4,main="Variable Importance",horizontal=T);
-#' ## Method: stepwise _bidirectional_ selection
+par(mar=c(0.5, 6, 1, 0.5), mgp=c(0, 0.2, 0), cex=0.9, tcl=0.2);
+plot(d1boruta1, las=2,xlab="",ylab="", cex.axis=0.4
+     ,main="Variable Importance",horizontal=T);
+#' ## Method: stepwise bidirectional selection
 #'
 #' Have to exclude CN, possibly only in the sim data. Also have to exclude STATE
 #' because otherwise hard to interpret in a linear model.
