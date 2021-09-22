@@ -20,15 +20,19 @@ knitr::opts_chunk$set(echo=debug>0, warning=debug>0, message=debug>0);
 inputdata <- c(dat0='data/SIM_SDOH_ZCTA.xlsx'      # census data by ZCTA
                ,cx0='data/SIM_ALLCMS.csv'          # RSA-ZCTA crosswalk
                ,rsa0='data/SIM_RSAv4 SCD RSRs.csv' # outcomes (RSR)
+               ,dct0='data/data_dictionary.tsv'    # data dictionary for the
+                                                   # dat1 dataset that _this_
+                                                   # scriport produces
 );
 
 # Load libraries ----
-library(GGally);
-library(rio);
-library(dplyr);
-library(pander);
-library(mice);
-library(Boruta);
+library(rio); library(dplyr); library(tidbits); # data handling
+library(pander);                                # formatting
+#library(GGally);
+#library(mice);
+library(Boruta);                                # variable selection
+library(nFactors);                              # optimal number of factors
+
 
 # Local project settings ----
 if(file.exists('local.config.R')) source('local.config.R',local=T,echo = F);
@@ -37,6 +41,7 @@ if(file.exists('local.config.R')) source('local.config.R',local=T,echo = F);
 dat0 <- import(inputdata['dat0']);
 cx0 <- import(inputdata['cx0']);
 rsa0 <- import(inputdata['rsa0']);
+dct0 <- import(inputdata['dct0']);
 # temporary fix while rebuilding the simulated files properly
 #rsa0 <- group_by(rsa0,RSA,Quartile) %>% summarise(RSR=max(RSR)) %>% select(RSR,RSA,Quartile) %>% data.frame
 # Merge data ----
@@ -44,45 +49,90 @@ rsa0 <- import(inputdata['rsa0']);
 #'
 #' `dat1` is the combined dataset, aggregated by RSA (CN).
 #'
-dat1 <- left_join(cx0,rsa0,by=c("CN"="RSA")) %>% left_join(dat0,.,by="ZCTA") %>%
-  group_by(CN) %>% summarise(across(where(is.numeric),median,na.rm=T)
+dat1 <- left_join(dat0,cx0,by="ZCTA") %>%
+  group_by(CN,YEAR) %>% summarise(across(matches('ACS_TOTAL_POP_WT'),sum,na.rm=T)
                              ,across(matches('REGION|STATE'),function(xx){
                                paste0(unique(xx),collapse='|')})
                              ,across(matches('ZCTA'),function(xx){
-                               length(unique(xx))})) %>% subset(!is.na(CN));
+                               length(unique(xx))})
+                             ,across(where(is.numeric) &
+                                       !matches('ACS_TOTAL_POP_WT') ,function(xx) {
+                               sum(ACS_TOTAL_POP_WT,na.rm=T)*
+                                 sum(xx/pmax(ACS_TOTAL_POP_WT,1),na.rm=T)})
+                             ) %>% subset(!is.na(CN)) %>%
+  left_join(rsa0,by=c(CN='RSA'));
+dct0 <- subset(dct0,column %in% colnames(dat1));
+
+# data prep ----
+#' # Scale the numeric variables
+dat2 <- select(dat1,-c('ZCTA','YEAR','Quartile'));
+dat2[,sapply(dat2,is.numeric)] <- scale(dat2[,sapply(dat2,is.numeric)]);
+
+#' # Obtain the numeric-only columns as dat3
+dat3 <- ungroup(dat2) %>% select(where(is.numeric));
+
+# factor analysis ----
+#' # How many factors to use?
+#'
+scdat3 <- nScree(as.data.frame(dat3),model='factors');
+plot(scdat3);
+capture.output(.nfdat3 <- print(scdat3));
+pander(.nfdat3);
+#'
+#' Looks like it's `r .nfdat3$noc`
+
+#' # Factor analysis
+fadat3 <- factanal(select(dat3,-'RSR'),factors=.nfdat3$noc,lower=0.05
+                   ,nstart=4,scores='regression',rotation='varimax');
+pvdat3 <- colSums(loadings(fadat3)^2)/nrow(loadings(fadat3));
+barplot(pvdat3,ylab='Proportion of Variance Explained');
+varsdat3 <- apply(loadings(fadat3),2,function(xx) names(xx[xx>0.2]));
+lapply(varsdat3,function(xx) ifelse(xx %in% v(c_domainexpert),wrap(xx,'*'),xx)) %>% pander
+
 # Missing values----
 #' # Charcterize missing values
 #'
-d1missing <- sapply(dat1,function(xx) sum(is.na(xx)));
-namesd1missing <- names(d1missing[d1missing>0]);
-#' `r length(namesd1missing)` columns have missing values, with
-#' `r sum(is.na(dat1[,namesd1missing]))` missing from a total of
-#' `r length(namesd1missing)*nrow(dat1)` or
-#' `r round(sum(is.na(dat1[,namesd1missing]))/(length(namesd1missing)*nrow(dat1)),3)*100`
-#' %.
+#' WIP: no longer any missing variables in processed data, will need to use data
+#' dictionary.
+#'
+# d1missing <- sapply(dat1,function(xx) sum(is.na(xx)));
+# namesd1missing <- names(d1missing[d1missing>0]);
+# #' `r length(namesd1missing)` columns have missing values, with
+# #' `r sum(is.na(dat1[,namesd1missing]))` missing from a total of
+# #' `r length(namesd1missing)*nrow(dat1)` or
+# #' `r round(sum(is.na(dat1[,namesd1missing]))/(length(namesd1missing)*nrow(dat1)),3)*100`
+# #' %.
 # Variable selection ----
 #' # Variable Selection
 #'
 #' ## Method: permutation (Boruta w/ Random Forests) (http://www.jstatsoft.org/v36/i11/)
 #+ borutaplot, fig.height=10, cache=TRUE
-d1boruta0 <- Boruta(RSR ~ ., data=select(dat1,-all_of(namesd1missing)));
+d1boruta0 <- Boruta(RSR ~ ., data=dat3);
 d1boruta1 <- TentativeRoughFix(d1boruta0);
 par(mar=c(0.5, 6, 1, 0.5), mgp=c(0, 0.2, 0), cex=0.9, tcl=0.2);
 plot(d1boruta1, las=2,xlab="",ylab="", cex.axis=0.4
      ,main="Variable Importance",horizontal=T);
 #' ## Method: stepwise bidirectional selection
 #'
-#' Have to exclude CN, possibly only in the sim data. Also have to exclude STATE
-#' because otherwise hard to interpret in a linear model.
+# Have to exclude CN, possibly only in the sim data. Also have to exclude STATE
+# because otherwise hard to interpret in a linear model.
+#' ### The _a priori_ model based on domain knowledge
+#'
+frm_exp0 <- paste(v(c_domainexpert),collapse='+') %>% paste('RSR ~',.) %>%
+  as.formula(env = NULL);
 #+ stepaic, results='hide'
-d1lmbase <- lm(RSR~1,data=select(dat1,-all_of(namesd1missing)));
-d1lmall <- lm(RSR~.,data=select(dat1,-all_of(namesd1missing)));
-d1lmall <- update(d1lmall,.~.-CN-STATE-REGION);
-d1aic <- step(d1lmbase,scope=list(lower=d1lmbase,upper=d1lmall),direction='both');
+d1lmbase <- lm(RSR~1,data=select(dat3));
+d1lmstart <- update(d1lmbase,formula=frm_exp0);
+d1lmall <- lm(RSR~.,data=dat3);
+#d1lmall <- update(d1lmall,.~.-CN-Quartile-STATE);
+d1aic <- step(d1lmstart,scope=list(lower=d1lmbase,upper=d1lmall),direction='both');
 #' ## Comparison of prioritized variables
 #'
 o1 <- tidy(d1aic) %>% arrange(desc(abs(statistic))) %>% select(c('term','statistic')) %>% subset(term!='(Intercept)');
-o2 <- subset(attStats(d1boruta1),decision!='Rejected') %>% arrange(desc(medianImp)) %>% select(medianImp) %>% tibble::rownames_to_column('term');
+o2 <- attStats(d1boruta1) %>%
+  subset(.,decision!='Rejected'|rownames(.) %in% c(o1$term,v(c_domainexpert))) %>%
+  arrange(desc(medianImp)) %>% select(medianImp) %>%
+  tibble::rownames_to_column('term');
 #' The following variables were chosen by both methods: `r intersect(o1$term,o2$term) %>% pander()`
 #'
 #' The following variables were chosen by stepwise elimination only: `r setdiff(o1$term,o2$term) %>% pander()`
@@ -90,4 +140,10 @@ o2 <- subset(attStats(d1boruta1),decision!='Rejected') %>% arrange(desc(medianIm
 #' The following variables were chosen by Boruta/random-forest only: `r setdiff(o2$term,o1$term) %>% pander()`
 #'
 #' Here is a table of all variables selected by either method:
-full_join(o2,o1) %>% setNames(c('','Boruta Importance','t-Statistic')) %>% pander(row.names=F,missing='-')
+full_join(o2,o1) %>%
+  full_join(data.frame(term=v(c_domainexpert),apriori=TRUE)) %>%
+  mutate(apriori=coalesce(apriori,FALSE)) %>%
+  arrange(desc(apriori),desc(abs(statistic)),desc(medianImp)) %>%
+  select(term,apriori,statistic,medianImp) %>%
+  setNames(c('','Manually Chosen','t-Statistic','Boruta Importance')) %>%
+  pander(row.names=F,missing='-')
