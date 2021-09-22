@@ -81,7 +81,7 @@ dat3 <- ungroup(dat2) %>% select(where(is.numeric));
 # factor analysis ----
 #' # How many factors to use?
 #'
-#+ scree, cahe=TRUE
+#+ scree, cache=TRUE
 scdat3 <- nScree(as.data.frame(dat3),model='factors');
 plot(scdat3);
 .junk<-capture.output(.nfdat3 <- print(scdat3));
@@ -91,12 +91,16 @@ pander(.nfdat3);
 #'
 #' # Factor analysis
 #'
+#+ fa, fig.width=10, cache=TRUE
 fadat3 <- factanal(select(dat3,-'RSR'),factors=.nfdat3$noc,lower=0.1
                    ,nstart=4,scores='regression',rotation='varimax');
 pvdat3 <- colSums(loadings(fadat3)^2)/nrow(loadings(fadat3));
 barplot(pvdat3,ylab='Proportion of Variance Explained');
-varsdat3 <- apply(loadings(fadat3),2,function(xx) names(xx[xx>0.2]));
-lapply(varsdat3,function(xx) ifelse(xx %in% v(c_domainexpert),wrap(xx,'**'),xx)) %>% pander
+varsdat3 <- apply(loadings(fadat3),2,function(xx) names(xx[xx>0.2]),simplify = F);
+varsdat3a <- lapply(varsdat3,function(xx) base::ifelse(xx %in% v(c_domainexpert)
+                                                 ,pander::wrap(xx,'**'),xx));
+message('About to print factors');
+pander(varsdat3a);
 
 # Missing values----
 #' # Charcterize missing values
@@ -139,28 +143,32 @@ aicdat3 <- step(lmstartdat3,scope=list(lower=lmbasedat3,upper=lmalldat3),directi
 #' ## Comparison of prioritized variables
 #'
 #+ comparison
-o1 <- tidy(aicdat3) %>% arrange(desc(abs(statistic))) %>% select(c('term','statistic')) %>% subset(term!='(Intercept)');
+o1 <- tidy(aicdat3) %>% arrange(desc(abs(statistic))) %>%
+  select(c('term','statistic')) %>% subset(term!='(Intercept)');
 o2 <- attStats(d1boruta1) %>%
   subset(.,decision!='Rejected'|rownames(.) %in% c(o1$term,v(c_domainexpert))) %>%
   arrange(desc(medianImp)) %>% select(medianImp) %>%
   tibble::rownames_to_column('term');
 #' ### The following variables were chosen by both methods:
-.allmethods <- intersect(o1$term,o2$term);
+#+ allmethods
+.allmethods <- intersect(o1$term,o2$term) %>%
+  ifelse(. %in% v(c_domainexpert),pander::wrap(.,'**'),.);
 if(length(.allmethods)>0) pander(.allmethods) else pander('None');
 #'
 #' ### The following variables were chosen by stepwise elimination only:
 #+ swonly
-.swonly <- setdiff(o1$term,o2$term);
+.swonly <- setdiff(o1$term,o2$term) %>%
+  ifelse(. %in% v(c_domainexpert),pander::wrap(.,'**'),.);
 if(length(.swonly)>0) pander(.swonly) else pander('None');
 #'
 #' ### The following variables were chosen by Boruta/random-forest only:
 #+ rfonly
-.rfonly <- setdiff(o2$term,o1$term);
+.rfonly <- setdiff(o2$term,o1$term) %>%
+  ifelse(. %in% v(c_domainexpert),pander::wrap(.,'**'),.);
 if(length(.rfonly)>0) pander(.rfonly) else pander('None');
 #'
 #' ### Here is a table of all variables selected by either method:
 #+ finalcompare
-message('about to join');
 full_join(o2,o1) %>%
   full_join(data.frame(term=v(c_domainexpert),apriori=TRUE)) %>%
   mutate(apriori=coalesce(apriori,FALSE)) %>%
