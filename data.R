@@ -12,6 +12,10 @@
 #' keep_md: true
 #' fig_caption: true
 #' css: 'production.css'
+#' output:
+#'   html_document:
+#'     toc: true
+#'     toc_float: true
 #' ---
 #+ init, echo=FALSE, message=FALSE, warning=FALSE,results='hide'
 # Init ----
