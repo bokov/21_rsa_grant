@@ -27,7 +27,7 @@ inputdata <- c(dat0='data/SIM_SDOH_ZCTA.xlsx'      # census data by ZCTA
 
 # Load libraries ----
 library(rio); library(dplyr); library(tidbits); # data handling
-library(pander);                                # formatting
+library(pander); library(broom);                # formatting
 #library(GGally);
 #library(mice);
 library(Boruta);                                # variable selection
@@ -45,10 +45,14 @@ dct0 <- import(inputdata['dct0']);
 # temporary fix while rebuilding the simulated files properly
 #rsa0 <- group_by(rsa0,RSA,Quartile) %>% summarise(RSR=max(RSR)) %>% select(RSR,RSA,Quartile) %>% data.frame
 # Merge data ----
-#' # Merging Data
+#' # Merging and Preparing Data
 #'
-#' `dat1` is the combined dataset, aggregated by RSA (CN).
-#'
+#' `dat1` is the combined dataset, aggregated by RSA (`CN`) and weighted by
+#' `ACS_TOTAL_POP_WT`.
+#' The `dat2` dataset is `dat1` with numeric values scaled and the following
+#' columns omitted: `ZCTA`, `YEAR`, and `Quartile`.
+#' Finally, `dat3` is the just the numeric columns from the `dat3` dataset.
+#+ dat1
 dat1 <- left_join(dat0,cx0,by="ZCTA") %>%
   group_by(CN,YEAR) %>% summarise(across(matches('ACS_TOTAL_POP_WT'),sum,na.rm=T)
                              ,across(matches('REGION|STATE'),function(xx){
@@ -64,30 +68,31 @@ dat1 <- left_join(dat0,cx0,by="ZCTA") %>%
 dct0 <- subset(dct0,column %in% colnames(dat1));
 
 # data prep ----
-#' # Scale the numeric variables
+# Scale the numeric variables
 dat2 <- select(dat1,-c('ZCTA','YEAR','Quartile'));
 dat2[,sapply(dat2,is.numeric)] <- scale(dat2[,sapply(dat2,is.numeric)]);
-
-#' # Obtain the numeric-only columns as dat3
+# Obtain the numeric-only columns as dat3
 dat3 <- ungroup(dat2) %>% select(where(is.numeric));
 
 # factor analysis ----
 #' # How many factors to use?
 #'
+#+ scree, cahe=TRUE
 scdat3 <- nScree(as.data.frame(dat3),model='factors');
 plot(scdat3);
-capture.output(.nfdat3 <- print(scdat3));
+.junk<-capture.output(.nfdat3 <- print(scdat3));
 pander(.nfdat3);
 #'
 #' Looks like it's `r .nfdat3$noc`
-
+#'
 #' # Factor analysis
-fadat3 <- factanal(select(dat3,-'RSR'),factors=.nfdat3$noc,lower=0.05
+#'
+fadat3 <- factanal(select(dat3,-'RSR'),factors=.nfdat3$noc,lower=0.1
                    ,nstart=4,scores='regression',rotation='varimax');
 pvdat3 <- colSums(loadings(fadat3)^2)/nrow(loadings(fadat3));
 barplot(pvdat3,ylab='Proportion of Variance Explained');
 varsdat3 <- apply(loadings(fadat3),2,function(xx) names(xx[xx>0.2]));
-lapply(varsdat3,function(xx) ifelse(xx %in% v(c_domainexpert),wrap(xx,'*'),xx)) %>% pander
+lapply(varsdat3,function(xx) ifelse(xx %in% v(c_domainexpert),wrap(xx,'**'),xx)) %>% pander
 
 # Missing values----
 #' # Charcterize missing values
@@ -120,26 +125,38 @@ plot(d1boruta1, las=2,xlab="",ylab="", cex.axis=0.4
 #'
 frm_exp0 <- paste(v(c_domainexpert),collapse='+') %>% paste('RSR ~',.) %>%
   as.formula(env = NULL);
-#+ stepaic, results='hide'
-d1lmbase <- lm(RSR~1,data=select(dat3));
-d1lmstart <- update(d1lmbase,formula=frm_exp0);
-d1lmall <- lm(RSR~.,data=dat3);
+pander(frm_exp0);
+#+ stepaic, results='hide', cache=TRUE
+lmbasedat3 <- lm(RSR~1,data=dat3);
+lmstartdat3 <- update(lmbasedat3,formula=frm_exp0);
+lmalldat3 <- lm(RSR~.,data=dat3);
 #d1lmall <- update(d1lmall,.~.-CN-Quartile-STATE);
-d1aic <- step(d1lmstart,scope=list(lower=d1lmbase,upper=d1lmall),direction='both');
+aicdat3 <- step(lmstartdat3,scope=list(lower=lmbasedat3,upper=lmalldat3),direction='both');
 #' ## Comparison of prioritized variables
 #'
-o1 <- tidy(d1aic) %>% arrange(desc(abs(statistic))) %>% select(c('term','statistic')) %>% subset(term!='(Intercept)');
+#+ comparison
+o1 <- tidy(aicdat3) %>% arrange(desc(abs(statistic))) %>% select(c('term','statistic')) %>% subset(term!='(Intercept)');
 o2 <- attStats(d1boruta1) %>%
   subset(.,decision!='Rejected'|rownames(.) %in% c(o1$term,v(c_domainexpert))) %>%
   arrange(desc(medianImp)) %>% select(medianImp) %>%
   tibble::rownames_to_column('term');
-#' The following variables were chosen by both methods: `r intersect(o1$term,o2$term) %>% pander()`
+#' ### The following variables were chosen by both methods:
+.allmethods <- intersect(o1$term,o2$term);
+if(length(.allmethods)>0) pander(.allmethods) else pander('None');
 #'
-#' The following variables were chosen by stepwise elimination only: `r setdiff(o1$term,o2$term) %>% pander()`
+#' ### The following variables were chosen by stepwise elimination only:
+#+ swonly
+.swonly <- setdiff(o1$term,o2$term);
+if(length(.swonly)>0) pander(.swonly) else pander('None');
 #'
-#' The following variables were chosen by Boruta/random-forest only: `r setdiff(o2$term,o1$term) %>% pander()`
+#' ### The following variables were chosen by Boruta/random-forest only:
+#+ rfonly
+.rfonly <- setdiff(o2$term,o1$term);
+if(length(.rfonly)>0) pander(.rfonly) else pander('None');
 #'
-#' Here is a table of all variables selected by either method:
+#' ### Here is a table of all variables selected by either method:
+#+ finalcompare
+message('about to join');
 full_join(o2,o1) %>%
   full_join(data.frame(term=v(c_domainexpert),apriori=TRUE)) %>%
   mutate(apriori=coalesce(apriori,FALSE)) %>%
