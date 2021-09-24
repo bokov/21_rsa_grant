@@ -80,7 +80,7 @@ dct0 <- import(inputdata['dct0']);
 #' The `dat2` dataset is `dat1` with numeric values scaled and the following
 #' columns omitted: `ZCTA`, `YEAR`, and `Quartile`.
 #' Finally, `dat3` is the just the numeric columns from the `dat3` dataset.
-#+ dat1
+#+ dat1,cache=debug<=0
 .c_numericother <- setdiff(v(c_numeric,dat=dat0)
                            ,c(v(c_pct),v(c_per1k),v(c_byarea),v(c_median)
                               ,v(c_medianhh),v(c_total),v(c_percap),v(c_meanhh)
