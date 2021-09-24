@@ -131,16 +131,24 @@ pander(.nfdat3);
 #'
 #' # Factor analysis
 #'
-#+ fa, fig.width=10, cache=debug<=0
+#+ fa, cache=debug<=0
 fadat3 <- factanal(select(dat3,-'RSR'),factors=.nfdat3$noc,lower=0.1
                    ,nstart=8,scores='regression',rotation='varimax');
+#+ faplot, fig.width=10
 pvdat3 <- colSums(loadings(fadat3)^2)/nrow(loadings(fadat3));
-barplot(pvdat3,ylab='Proportion of Variance Explained');
-varsdat3 <- apply(loadings(fadat3),2,function(xx) names(xx[xx>0.2]),simplify = F);
+names(pvdat3) <- scales::percent(pvdat3,accuracy=0.1) %>%
+  paste0(names(.),', ',.);
+par(mar=c(7,4.1,4.1,2.1));
+barplot(pvdat3,ylab='Proportion of Variance Explained',las=2);
+par(.par_default);
+varsdat3 <- apply(loadings(fadat3),2,function(xx){
+  names(xx[xx>0.2])},simplify = F) %>% setNames(names(pvdat3));
 varsdat3a <- lapply(varsdat3,function(xx) base::ifelse(xx %in% v(c_domainexpert)
-                                                 ,pander::wrap(xx,'**'),xx));
-message('About to print factors');
-pander(varsdat3a);
+                                                 ,pander::wrap(xx,'**'),xx)) ;
+#message('About to print factors');
+#'
+#+ factorlist
+    pander(varsdat3a);
 
 # Missing values----
 #' # Charcterize missing values
@@ -177,7 +185,8 @@ plot(d3boruta1, las=2,xlab="",ylab="", cex.axis=0.4
      ,names=.borutanames1);
 axis(2,at=.borutapos,labels=.borutanames0[.borutapos],font = 2,las=2
      ,cex.axis=0.4);
-abline(h=.borutapos,lty=3);
+segments(-20,.borutapos,.borutameds[.borutatf],col="#9400D350",lwd=8);
+#abline(h=.borutapos,lty=3);
 par(.par_default);
 #' ## Method: stepwise bidirectional selection
 #'
