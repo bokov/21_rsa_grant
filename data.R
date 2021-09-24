@@ -232,8 +232,8 @@ if(length(.rfonly)>0) pander(.rfonly) else pander('None');
 #'
 #' ### Here is a table of all variables selected by either method:
 #+ finalcompare
-full_join(o2,o1) %>%
-  full_join(data.frame(term=v(c_domainexpert),apriori=TRUE)) %>%
+full_join(o2,o1,by=c(term='term')) %>%
+  full_join(data.frame(term=v(c_domainexpert),apriori=TRUE),by=c(term='term')) %>%
   mutate(apriori=coalesce(apriori,FALSE)) %>%
   arrange(desc(apriori),desc(abs(statistic)),desc(medianImp)) %>%
   select(term,apriori,statistic,medianImp) %>%
