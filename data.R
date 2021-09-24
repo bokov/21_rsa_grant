@@ -36,10 +36,34 @@ library(pander); library(broom);                # formatting
 #library(mice);
 library(Boruta);                                # variable selection
 library(nFactors);                              # optimal number of factors
+library(metamedian);                            # median-of-medians01
 
 
 # Local project settings ----
+# tweak base plot settings to avoid captions going off-screen
+.par_default <- par(no.readonly = TRUE);
+.par_borutaplot <- list(mar=c(0.5, 6, 1, 0.5), mgp=c(0, 0.2, 0), cex=0.9,
+                       tcl=0.2);
+# overwrite previously set values if needed
 if(file.exists('local.config.R')) source('local.config.R',local=T,echo = F);
+
+# Local functions ----
+
+# Perecents. Use with den=ACS_TOTAL_POP_WT for c_pct columns. For c_per1k, use
+# the same function but with per=1000. For c_byarea columns, use
+# den=CEN_AREALAND_SQM and per=1
+.aggpct <-function(num,den,per=100) per*sum(num*pmax(den,1)/per,na.rm=T)/sum(den,na.rm=T);
+# Medians. For c_median columns, use den=ACS_TOTAL_POP_WT but for c_medianhh
+# columns use den=ACS_TOTAL_HOUSEHOLD
+.aggmed <-function(num,den,...) pool.med(num,pmax(den,1))$pooled.est;
+# Means
+# For c_meanhh, den= ACS_TOTAL_HOUSEHOLD
+.aggmean <-function(num,den,...) weighted.mean(num,coalesce(den,0),na.rm=T);
+# Per capita
+.aggpcap <-function(num,den,...) sum(num*den,na.rm=T)/sum(den,na.rm=T);
+# Largest by area (for discrete values)
+.aggmaxa <-function(num,den,...) rep.int(num,den) %>% table %>% sort %>% rev %>%
+  head(1) %>% names;
 
 # Import data ----
 dat0 <- import(inputdata['dat0']);
@@ -57,31 +81,47 @@ dct0 <- import(inputdata['dct0']);
 #' columns omitted: `ZCTA`, `YEAR`, and `Quartile`.
 #' Finally, `dat3` is the just the numeric columns from the `dat3` dataset.
 #+ dat1
+.c_numericother <- setdiff(v(c_numeric,dat=dat0)
+                           ,c(v(c_pct),v(c_per1k),v(c_byarea),v(c_median)
+                              ,v(c_medianhh),v(c_total),v(c_percap),v(c_meanhh)
+                              ,v(c_factor)));
 dat1 <- left_join(dat0,cx0,by="ZCTA") %>%
-  group_by(CN,YEAR) %>% summarise(across(matches('ACS_TOTAL_POP_WT'),sum,na.rm=T)
-                             ,across(matches('REGION|STATE'),function(xx){
-                               paste0(unique(xx),collapse='|')})
-                             ,across(matches('ZCTA'),function(xx){
-                               length(unique(xx))})
-                             ,across(where(is.numeric) &
-                                       !matches('ACS_TOTAL_POP_WT') ,function(xx) {
-                               sum(ACS_TOTAL_POP_WT,na.rm=T)*
-                                 sum(xx/pmax(ACS_TOTAL_POP_WT,1),na.rm=T)})
+  group_by(CN,YEAR) %>% summarise(
+    across(.cols=v(c_pct,dat=(.)),.aggpct,den=ACS_TOTAL_POP_WT)
+    ,across(.cols=v(c_per1k,dat=(.)),.aggpct,den=ACS_TOTAL_POP_WT,per=1000)
+    ,across(.cols=v(c_byarea,dat=(.)),.aggpct,den=CEN_AREALAND_SQM,per=1)
+    ,across(.cols=v(c_median,dat=(.)),.aggmed,den=ACS_TOTAL_POP_WT)
+    ,across(.cols=v(c_medianhh,dat=(.)),.aggmed,den=ACS_TOTAL_HOUSEHOLD)
+    ,across(.cols=v(c_meanhh,dat=(.)),.aggmean,den=ACS_TOTAL_HOUSEHOLD)
+    ,across(.cols=v(c_percap,dat=(.)),.aggpcap,den=ACS_TOTAL_POP_WT)
+    ,across(.cols=all_of(.c_numericother),.aggmean,den=ACS_TOTAL_POP_WT)
+    ,across(.cols=v(c_factorarea,dat=(.)),.aggmaxa,den=CEN_AREALAND_SQM)
+    ,across(.cols=v(c_total,dat=(.)),sum,na.rm=T)
+    # across(matches('ACS_TOTAL_POP_WT'),sum,na.rm=T)
+    #                          ,across(matches('REGION|STATE'),function(xx){
+    #                            paste0(unique(xx),collapse='|')})
+    #                          ,across(matches('ZCTA'),function(xx){
+    #                            length(unique(xx))})
+    #                          ,across(where(is.numeric) &
+    #                                    !matches('ACS_TOTAL_POP_WT') ,function(xx) {
+    #                            sum(ACS_TOTAL_POP_WT,na.rm=T)*
+    #                              sum(xx/pmax(ACS_TOTAL_POP_WT,1),na.rm=T)})
                              ) %>% subset(!is.na(CN)) %>%
-  left_join(rsa0,by=c(CN='RSA'));
+  left_join(rsa0,by=c(CN='RSA')) %>% ungroup %>%
+  mutate(across(v(c_factor,dat=(.)),factor));
 dct0 <- subset(dct0,column %in% colnames(dat1));
 
 # data prep ----
 # Scale the numeric variables
-dat2 <- select(dat1,-c('ZCTA','YEAR','Quartile'));
+dat2 <- select(dat1,-c('YEAR','Quartile'));
 dat2[,sapply(dat2,is.numeric)] <- scale(dat2[,sapply(dat2,is.numeric)]);
 # Obtain the numeric-only columns as dat3
-dat3 <- ungroup(dat2) %>% select(where(is.numeric));
+dat3 <- select(dat2,where(is.numeric));
 
 # factor analysis ----
 #' # How many factors to use?
 #'
-#+ scree, cache=TRUE
+#+ scree, cache=debug<=0
 scdat3 <- nScree(as.data.frame(dat3),model='factors');
 plot(scdat3);
 .junk<-capture.output(.nfdat3 <- print(scdat3));
@@ -91,9 +131,9 @@ pander(.nfdat3);
 #'
 #' # Factor analysis
 #'
-#+ fa, fig.width=10, cache=TRUE
+#+ fa, fig.width=10, cache=debug<=0
 fadat3 <- factanal(select(dat3,-'RSR'),factors=.nfdat3$noc,lower=0.1
-                   ,nstart=4,scores='regression',rotation='varimax');
+                   ,nstart=8,scores='regression',rotation='varimax');
 pvdat3 <- colSums(loadings(fadat3)^2)/nrow(loadings(fadat3));
 barplot(pvdat3,ylab='Proportion of Variance Explained');
 varsdat3 <- apply(loadings(fadat3),2,function(xx) names(xx[xx>0.2]),simplify = F);
