@@ -171,7 +171,7 @@ plot(d1boruta1, las=2,xlab="",ylab="", cex.axis=0.4
 # because otherwise hard to interpret in a linear model.
 #' ### The _a priori_ model based on domain knowledge
 #'
-frm_exp0 <- paste(v(c_domainexpert),collapse='+') %>% paste('RSR ~',.) %>%
+frm_exp0 <- paste(v(c_domainexpert,dat3),collapse='+') %>% paste('RSR ~',.) %>%
   as.formula(env = NULL);
 pander(frm_exp0);
 #+ stepaic, results='hide', cache=debug<=0
