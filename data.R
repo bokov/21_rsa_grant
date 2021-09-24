@@ -199,7 +199,7 @@ aicdat3 <- step(lmstartdat3,scope=list(lower=lmbasedat3,upper=lmalldat3),directi
 #+ comparison
 o1 <- tidy(aicdat3) %>% arrange(desc(abs(statistic))) %>%
   select(c('term','statistic')) %>% subset(term!='(Intercept)');
-o2 <- attStats(d1boruta1) %>%
+o2 <- attStats(d3boruta1) %>%
   subset(.,decision!='Rejected'|rownames(.) %in% c(o1$term,v(c_domainexpert))) %>%
   arrange(desc(medianImp)) %>% select(medianImp) %>%
   tibble::rownames_to_column('term');
