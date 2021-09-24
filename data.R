@@ -159,12 +159,12 @@ pander(varsdat3a);
 #' # Variable Selection
 #'
 #' ## Method: permutation (Boruta w/ Random Forests) (http://www.jstatsoft.org/v36/i11/)
-#+ borutaplot, fig.height=10, cache=TRUE
 d1boruta0 <- Boruta(RSR ~ ., data=dat3);
 d1boruta1 <- TentativeRoughFix(d1boruta0);
 par(mar=c(0.5, 6, 1, 0.5), mgp=c(0, 0.2, 0), cex=0.9, tcl=0.2);
 plot(d1boruta1, las=2,xlab="",ylab="", cex.axis=0.4
      ,main="Variable Importance",horizontal=T);
+#+ borutacalc, cache=debug<=0
 #' ## Method: stepwise bidirectional selection
 #'
 # Have to exclude CN, possibly only in the sim data. Also have to exclude STATE
@@ -174,7 +174,7 @@ plot(d1boruta1, las=2,xlab="",ylab="", cex.axis=0.4
 frm_exp0 <- paste(v(c_domainexpert),collapse='+') %>% paste('RSR ~',.) %>%
   as.formula(env = NULL);
 pander(frm_exp0);
-#+ stepaic, results='hide', cache=TRUE
+#+ stepaic, results='hide', cache=debug<=0
 lmbasedat3 <- lm(RSR~1,data=dat3);
 lmstartdat3 <- update(lmbasedat3,formula=frm_exp0);
 lmalldat3 <- lm(RSR~.,data=dat3);
