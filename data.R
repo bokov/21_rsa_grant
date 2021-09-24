@@ -159,12 +159,26 @@ pander(varsdat3a);
 #' # Variable Selection
 #'
 #' ## Method: permutation (Boruta w/ Random Forests) (http://www.jstatsoft.org/v36/i11/)
-d1boruta0 <- Boruta(RSR ~ ., data=dat3);
-d1boruta1 <- TentativeRoughFix(d1boruta0);
-par(mar=c(0.5, 6, 1, 0.5), mgp=c(0, 0.2, 0), cex=0.9, tcl=0.2);
-plot(d1boruta1, las=2,xlab="",ylab="", cex.axis=0.4
-     ,main="Variable Importance",horizontal=T);
 #+ borutacalc, cache=debug<=0
+d3boruta0 <- Boruta(RSR ~ ., data=dat3);
+d3boruta1 <- TentativeRoughFix(d3boruta0);
+#+ borutaplot, fig.height=14
+.borutameds <- apply(d3boruta1$ImpHistory,2,function(xx){
+  median(xx[is.finite(xx)],na.rm=T)}) %>% sort;
+.borutanames0 <- names(.borutameds);
+.borutatf <- .borutanames0 %in% v(c_domainexpert);
+.borutanames1 <- ifelse(.borutatf,'',.borutanames0);
+.borutanames2 <- ifelse(!.borutatf,'',.borutanames0);
+.borutahilights <- ifelse(.borutatf,'darkviolet','darkgray');
+.borutapos <- seq_along(.borutameds)[.borutatf];
+par(.par_borutaplot);
+plot(d3boruta1, las=2,xlab="",ylab="", cex.axis=0.4
+     ,main="Variable Importance",horizontal=T,border=.borutahilights
+     ,names=.borutanames1);
+axis(2,at=.borutapos,labels=.borutanames0[.borutapos],font = 2,las=2
+     ,cex.axis=0.4);
+abline(h=.borutapos,lty=3);
+par(.par_default);
 #' ## Method: stepwise bidirectional selection
 #'
 # Have to exclude CN, possibly only in the sim data. Also have to exclude STATE
