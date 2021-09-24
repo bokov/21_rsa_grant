@@ -1,6 +1,6 @@
 #' ---
 #' title: "Preparation of data for analysis of successful community discharge from rehab by RSAs"
-#' author: 'Timothy Reistetter ^1,✉^, Alex Bokov ^1^, Susanne Schmidt ^1^, Mei-Lin Min ^1^'
+#' author: 'Timothy Reistetter ^1^, Alex Bokov ^1^, Susanne Schmidt ^1^, Mei-Lin Min ^1^'
 #' abstract: |
 #'   | Merging and cleanup of CMS and Census data, with some preliminary
 #'   unsupervised variable selection
