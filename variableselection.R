@@ -23,9 +23,7 @@ knitr::opts_chunk$set(echo=debug>0, warning=debug>0, message=debug>0);
 inputdata <- c(dat0='data/SIM_SDOH_ZCTA.xlsx'          # census data by ZCTA
                ,cx0='data/SIM_ALLCMS.csv'              # RSA-ZCTA crosswalk
                ,rsa0='data/SIM_RSAv4 SCD RSRs.csv'     # outcomes (RSR)
-               ,dct0='data/data_dictionary.csv'        # data dictionary for the
-               # dat1 dataset that _this_
-               # scriport produces
+               ,dct0='data/data_dictionary.csv'        # data dictionary
                ,dat1='SDOH_RSR_2013_prelim.csv'        # the dat1 dataset
                ,dat2='SDOH_RSR_2013_scaled_prelim.csv' # the scaled version of
 );
@@ -37,7 +35,6 @@ library(pander); library(broom);                # formatting
 #library(mice);
 library(Boruta);                                # variable selection
 library(nFactors);                              # optimal number of factors
-library(metamedian);                            # median-of-medians01
 
 
 # Local project settings ----
@@ -46,15 +43,18 @@ library(metamedian);                            # median-of-medians01
 .par_borutaplot <- list(mar=c(0.5, 6, 1, 0.5), mgp=c(0, 0.2, 0), cex=0.9,
                         tcl=0.2);
 # overwrite previously set values if needed
-if(file.exists('local.config.R')) source('local.config.R',local=T,echo = F);
+source('config.R',local=T,echo = debug>0);
+if(file.exists('local.config.R')) source('local.config.R',local=T,echo = debug>0);
 
 # Import data ----
 
 # if merged files not already built, run the script that builds them
-if(!all(file.exists(inputdata[c('dat1','dat2')]))) system('R data.R');
+if(!all(file.exists(inputdata[c('dat1','dat2')]))){
+  system('R --vanilla -q -s -f data.R',ignore.stdout = debug==0,ignore.stderr = debug==0)};
 dat1 <- import(inputdata['dat1']);
 dat2 <- import(inputdata['dat2']);
 dct0 <- import(inputdata['dct0']);
+dct0 <- subset(dct0,column %in% colnames(dat1));
 # Obtain the numeric-only columns as dat3tr and dat3ts for training and test
 # sets, respectively
 dat3tr <- subset(dat2,subsample=='train') %>% select(where(is.numeric));
