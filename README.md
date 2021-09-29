@@ -35,9 +35,9 @@ If you want to compile a Word version of the output, you could use:
 By default, all the data used is the simulated version. 
 
 If you downloaded the `SDOH_RSR_2013_prelim.csv` and `SDOH_RSR_2013_prelim.csv`
-from our shared folder just put them in the top level of this project folder and
-start working with `variableselection.R` (or a new script of your own). Please
-remember to not add the data files to your repository.
+spreadsheets from our shared folder just put them in the top level of this
+project folder and start working with `variableselection.R` (or a new script of
+your own). Please remember to not add the data files to your repository.
 
 If you have the raw data and wish to use build `SDOH_RSR_2013_prelim.csv` and
 `SDOH_RSR_2013_prelim.csv` from scratch, create a script named `local.config.R`
@@ -59,7 +59,7 @@ inputdata <- c(dat0='data/SIM_SDOH_ZCTA.xlsx'          # census data by ZCTA
 
 This is all you need in order to generate the same results that I've been
 posting to our shared space. There is no need to change paths for any of the
-other file paths-- all of them get generated as needed if they are missing.
+other files-- all of them get generated as needed if they are missing.
 
 If you are collaborating with us you are welcome to create forks.
 We welcome your pull requests and suggestions. You should _never_ check the
