@@ -24,9 +24,11 @@ library('synthpop');
 library('tidbits');
 #' # Config
 source('config.R');
-inputdata <- c(orig0='/tmp/SDOH_ZCTA_2013.xlsx'
-               ,cx0='/tmp/mozilla_a0/ALLCMSv4.csv'
-               ,rsa0='/tmp/mozilla_a0/RSAv4 SCD RSRs 20210625.csv');
+inputdata <- c(orig0='local/in/SDOH_ZCTA_2013.xlsx'
+               ,cx0='local/in/ALLCMSv4.csv'
+               ,rsa0='local/in/RSAv4 SCD RSRs 20210625.csv');
+if(file.exists('local.config.R')) source('local.config.R',local=T,echo = debug>0);
+
 #' # Import data
 orig0 <- import(inputdata['orig0']);
 cx0 <- import(inputdata['cx0']);
@@ -37,6 +39,7 @@ orig0cb <- codebook.syn(dat0);
 #' # Simulations
 #'
 #' ## All data
+set.seed(project_seed);
 sim0 <- select(dat0,-c("Quartile","REGION","STATE","CN","ZCTA")) %>% syn;
 sim1 <- select(dat0,c('ZCTA','REGION','STATE','CN')) %>%
   mutate(cntemp=rank(RSR,ties='random')) %>%
@@ -56,6 +59,7 @@ sim1 <- arrange(sim0$syn,STATE) %>%
          ,RSA=CN
          ,Quartile=as.character(Quartile));
 #' ## Simulated, RSA-indexed outcomes
+set.seed(project_seed);
 rsascramble <- paste0(sample(LETTERS[-24],25),collapse='');
 cx1 <- mutate(cx0,CN=chartr(CN,paste0(LETTERS[-24],collapse=''),rsascramble));
 rsa1 <- rename(sim1,RSA=CN) %>% group_by(RSA) %>%
