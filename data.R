@@ -112,16 +112,23 @@ dat1 <- inner_join(dat0,cx0,by="ZCTA") %>%
     ) %>% subset(!is.na(CN)) %>%
   left_join(rsa0,by=c(CN='RSA')) %>% ungroup %>%
   mutate(across(v(c_factor,dat=(.)),factor)
-         ,Quintile=cut(RSR,breaks=quantile(RSR,seq(0,1,len=6)),include.lowest=T,labels=paste0('Q',1:5))
-         ,Decile=cut(RSR,breaks=quantile(RSR,seq(0,1,len=11)),include.lowest=T,labels=paste0('Q',1:10))
+         ,sdi_score=ifelse(is.na(sdi_score)
+                           ,median(sdi_score,na.rm=T),sdi_score)
+         ,Quintile=cut(RSR,breaks=quantile(RSR,seq(0,1,len=6))
+                       ,include.lowest=T,labels=paste0('Q',1:5))
+         ,Decile=cut(RSR,breaks=quantile(RSR,seq(0,1,len=11))
+                     ,include.lowest=T,labels=paste0('Q',1:10))
          # this column will be used to assign rows to the training and the testing sets
          ,subsample=sample(c('train','test'),n(),replace = TRUE)
          );
+
+
 dct0 <- subset(dct0,column %in% colnames(dat1));
 
 # data prep ----
 # Scale the numeric variables
-dat2 <- select(dat1,-c('YEAR','Quartile'));
+dat2 <- select(dat1,-c('YEAR','Quartile',v(c_factor)));
 dat2[,sapply(dat2,is.numeric)] <- scale(dat2[,sapply(dat2,is.numeric)]);
 export(dat1,inputdata['dat1']);
 export(dat2,inputdata['dat2']);
+
