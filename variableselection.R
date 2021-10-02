@@ -36,8 +36,12 @@ library(pander); library(broom);                # formatting
 library(Boruta);                                # variable selection
 library(nFactors);                              # optimal number of factors
 
+# Make tables never split
 panderOptions('table.split.table',Inf);
 panderOptions('table.split.cells',Inf);
+
+# Get stepAICc (like stepAIC but adjusting for small sample sizes)
+source('project_functions.R');
 
 # Local project settings ----
 # tweak base plot settings to avoid captions going off-screen
@@ -147,9 +151,15 @@ pander(frm_exp0);
 lmbasedat3 <- lm(RSR~1,data=dat3tr);
 lmstartdat3 <- update(lmbasedat3,formula=frm_exp0);
 lmalldat3 <- lm(RSR~(.)^2,data=dat3tr);
-#d1lmall <- update(d1lmall,.~.-CN-Quartile-STATE);
-aicdat3 <- step(lmstartdat3,scope=list(lower=lmbasedat3,upper=lmalldat3)
+# This is actually BIC (so, BICc?) because the k parameter is adjusted to the
+# sample size instead of being 2. BIC is less prone to giant models under finite
+# sample conditions. In any case, at least in this training dataset step() and
+# stepAICc select exactly the same model. A big part of our goal here is just
+# to get rid of collinear variables in a principled manner.
+#
+aicdat3 <- stepAICc(lmstartdat3,scope=list(lower=lmbasedat3,upper=lmalldat3)
                 ,direction='both',k=log(nrow(dat3tr)));
+
 #' ## Comparison of prioritized variables
 #'
 #+ comparison
