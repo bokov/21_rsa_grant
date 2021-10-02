@@ -36,6 +36,8 @@ library(pander); library(broom);                # formatting
 library(Boruta);                                # variable selection
 library(nFactors);                              # optimal number of factors
 
+panderOptions('table.split.table',Inf);
+panderOptions('table.split.cells',Inf);
 
 # Local project settings ----
 # tweak base plot settings to avoid captions going off-screen
@@ -45,6 +47,8 @@ library(nFactors);                              # optimal number of factors
 # overwrite previously set values if needed
 source('config.R',local=T,echo = debug>0);
 if(file.exists('local.config.R')) source('local.config.R',local=T,echo = debug>0);
+
+
 
 # Import data ----
 
@@ -64,7 +68,7 @@ dat3ts <- subset(dat2,subsample=='test') %>% select(where(is.numeric));
 #' # How many factors to use?
 #'
 #+ scree, cache=debug<=0
-scdat3 <- nScree(as.data.frame(dat3tr),model='factors');
+scdat3 <- nScree(x=as.data.frame(dat3tr),model='factors');
 plot(scdat3);
 .junk<-capture.output(.nfdat3 <- print(scdat3));
 pander(.nfdat3);
@@ -142,9 +146,10 @@ pander(frm_exp0);
 #+ stepaic, results='hide', cache=debug<=0
 lmbasedat3 <- lm(RSR~1,data=dat3tr);
 lmstartdat3 <- update(lmbasedat3,formula=frm_exp0);
-lmalldat3 <- lm(RSR~.,data=dat3tr);
+lmalldat3 <- lm(RSR~(.)^2,data=dat3tr);
 #d1lmall <- update(d1lmall,.~.-CN-Quartile-STATE);
-aicdat3 <- step(lmstartdat3,scope=list(lower=lmbasedat3,upper=lmalldat3),direction='both');
+aicdat3 <- step(lmstartdat3,scope=list(lower=lmbasedat3,upper=lmalldat3)
+                ,direction='both',k=log(nrow(dat3tr)));
 #' ## Comparison of prioritized variables
 #'
 #+ comparison
