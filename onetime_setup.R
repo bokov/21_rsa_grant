@@ -1,6 +1,7 @@
 # required CRAN packages
 install.packages(.crandeps<-c('rio','tidyverse','devtools','pander','rmarkdown'
-                              ,'GGally','Boruta','nFactors','metamedian')
+                              ,'GGally','Boruta','nFactors','metamedian'
+                              ,'RCurl')
                  ,repos = 'https://cloud.r-project.org');
 
 # required author package

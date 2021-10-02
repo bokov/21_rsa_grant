@@ -34,6 +34,7 @@ inputdata <- c(dat0='data/SIM_SDOH_ZCTA.xlsx'          # census data by ZCTA
 
 # Load libraries ----
 library(rio); library(dplyr); library(tidbits);  # data handling
+library(RCurl);
 library(metamedian);                             # median-of-medians01
 
 
@@ -48,20 +49,31 @@ if(file.exists('local.config.R')) source('local.config.R',local=T,echo = debug>0
 # Percents. Use with den=ACS_TOTAL_POP_WT for c_pct columns. For c_per1k, use
 # the same function but with per=1000. For c_byarea columns, use
 # den=CEN_AREALAND_SQM and per=1
-.aggpct <-function(num,den,per=100) per*sum(num*pmax(den,1)/per,na.rm=T)/sum(den,na.rm=T);
+.aggpct <-function(num,den,per=100) per*sum(num*pmax(den,1,na.rm=T)/per,na.rm=T)/sum(den,na.rm=T);
 # Medians. For c_median columns, use den=ACS_TOTAL_POP_WT but for c_medianhh
 # columns use den=ACS_TOTAL_HOUSEHOLD
-.aggmed <-function(num,den,...) pool.med(num,pmax(den,1))$pooled.est;
+.aggmed <-function(num,den,...) if(all(is.na(num))) return(NA) else {
+  pool.med(num,pmax(den,1,na.rm=T))$pooled.est};
 # Means
 # For c_meanhh, den= ACS_TOTAL_HOUSEHOLD
 .aggmean <-function(num,den,...) weighted.mean(num,coalesce(den,0),na.rm=T);
 # Per capita
-.aggpcap <-function(num,den,...) sum(num*den,na.rm=T)/sum(den,na.rm=T);
+.aggpcap <-function(num,den,...) {out <- try(sum(num*den,na.rm=T)/sum(den,na.rm=T));
+if(is(out,'try-error')) browser(); out;}
 # Largest by area (for discrete values)
 .aggmaxa <-function(num,den,...) rep.int(num,den) %>% table %>% sort %>% rev %>%
   head(1) %>% names;
 
 # Import data ----
+# Importing the Social Deprivation Index
+if(!file.exists('ACS2015_zctaallvars.xlsx')){
+  writeBin(getBinaryURL('https://www.graham-center.org/content/dam/rgc/documents/maps-data-tools/sdi/ACS2015_zctaallvars.xlsx'
+                        ,ssl.verifypeer=F,ssl.verifyhost=F)
+           ,'ACS2015_zctaallvars.xlsx')};
+sdi <- import('ACS2015_zctaallvars.xlsx') %>%
+  mutate(ZCTA=as.character(zcta)) %>% select(-'zcta') %>%
+  subset(!is.na(sdi_score));
+# Importing the local data files
 dat0 <- import(inputdata['dat0']);
 cx0 <- import(inputdata['cx0']);
 rsa0 <- import(inputdata['rsa0']);
@@ -74,13 +86,14 @@ dct0 <- import(inputdata['dct0']);
 #' The `dat2` dataset is `dat1` with numeric values scaled and the following
 #' columns omitted: `ZCTA`, `YEAR`, and `Quartile`.
 #' Finally, `dat3tr` is the just the numeric columns from the `dat2` dataset.
-#+ dat1,cache=debug<=0
+#+ dat1,cache=F
 .c_numericother <- setdiff(v(c_numeric,dat=dat0)
                            ,c(v(c_pct),v(c_per1k),v(c_byarea),v(c_median)
                               ,v(c_medianhh),v(c_total),v(c_percap),v(c_meanhh)
-                              ,v(c_factor)));
+                              ,v(c_factor))) %>% c('sdi_score');
 set.seed(project_seed);
-dat1 <- left_join(dat0,cx0,by="ZCTA") %>%
+dat1 <- inner_join(dat0,cx0,by="ZCTA") %>%
+  left_join(sdi[,c('ZCTA','sdi_score')] ,by="ZCTA") %>%
   group_by(CN,YEAR) %>% summarise(
     # using the aggregation functions declared above on their respective sets of columns
     across(.cols=v(c_pct,dat=(.)),.aggpct,den=ACS_TOTAL_POP_WT)
