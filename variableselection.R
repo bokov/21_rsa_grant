@@ -33,6 +33,8 @@ library(rio); library(dplyr); library(tidbits); # data handling
 library(pander); library(broom);                # formatting
 #library(GGally);
 #library(mice);
+library(psych);                                 # factor analysis
+library(caret);                                 # cross-validation
 library(Boruta);                                # variable selection
 library(nFactors);                              # optimal number of factors
 
@@ -72,33 +74,52 @@ dat3ts <- subset(dat2,subsample=='test') %>% select(where(is.numeric));
 #' # How many factors to use?
 #'
 #+ scree, cache=debug<=0
-scdat3 <- nScree(x=as.data.frame(dat3tr),model='factors');
-plot(scdat3);
-.junk<-capture.output(.nfdat3 <- print(scdat3));
-pander(.nfdat3);
+set.seed(project_seed);
+.junk<-capture.output(fapar3 <- fa.parallel(select(dat3tr,-RSR),fm='ml',fa='fa'
+                                            ,nfactors = 30,show.legend=F));
+# scdat3 <- nScree(x=as.data.frame(dat3tr),model='factors');
+# plot(scdat3);
+# .junk<-capture.output(.nfdat3 <- print(scdat3));
+# pander(.nfdat3);
+
 #'
-#' Looks like it's `r .nfdat3$noc`
+#' Looks like it's `r fapar3$nfact`
 #'
 #' # Factor analysis
 #'
-#+ fa, cache=debug<=0
-fadat3 <- factanal(select(dat3tr,-'RSR'),factors=.nfdat3$noc,lower=0.1
-                   ,nstart=8,scores='regression',rotation='varimax');
+#+ fa, cache=debug<=0,messages=FALSE
+# fadat3 <- factanal(select(dat3tr,-'RSR'),factors=.nfdat3$noc,lower=0.1
+#                    ,nstart=8,scores='regression',rotation='varimax');
+#
+fa3 <-fa(select(dat3tr,-RSR),nfactors = fapar3$nfact,rotate='varimax',fm='ml') %>% fa.sort();
+faload3 <- with(fa3,{
+  cn<-colnames(loadings); expr <- embed(cn,2) %>%
+    apply(1,function(xx) sprintf("abs(%s)>abs(%s)~'%s'",xx[2],xx[1],xx[2])) %>%
+    c(sprintf("TRUE~'%s'",tail(cn,1))) %>% paste0(collapse=',') %>%
+    sprintf('case_when(%s)',.) %>% parse(text=.) %>%
+    eval(as.data.frame(loadings[])) %>% split(rownames(loadings),.)});
 #+ faplot, fig.width=10
-pvdat3 <- colSums(loadings(fadat3)^2)/nrow(loadings(fadat3));
+pvdat3 <- with(fa3,Vaccounted['Proportion Explained'
+                              ,intersect(colnames(Vaccounted), names(faload3))]);
+#pvdat3 <- colSums(loadings(fadat3)^2)/nrow(loadings(fadat3));
 names(pvdat3) <- scales::percent(pvdat3,accuracy=0.1) %>%
   paste0(names(.),', ',.);
 par(mar=c(7,4.1,4.1,2.1));
 barplot(pvdat3,ylab='Proportion of Variance Explained',las=2);
 par(.par_default);
-varsdat3 <- apply(loadings(fadat3),2,function(xx){
-  names(xx[xx>0.2])},simplify = F) %>% setNames(names(pvdat3));
-varsdat3a <- lapply(varsdat3,function(xx) base::ifelse(xx %in% v(c_domainexpert)
-                                                       ,pander::wrap(xx,'**'),xx)) ;
+# varsdat3 <- apply(loadings(fadat3),2,function(xx){
+#   names(xx[xx>0.2])},simplify = F) %>% setNames(names(pvdat3));
+# varsdat3a <- lapply(varsdat3,function(xx) base::ifelse(xx %in% v(c_domainexpert)
+#                                                        ,pander::wrap(xx,'**'),xx)) ;
+faload3a <- lapply(faload3,function(xx) base::ifelse(xx %in% v(c_domainexpert)
+                                                     ,pander::wrap(xx,'**'),xx));
 #message('About to print factors');
-#'
+#' All the numeric variables are represented in the first `r length(faload3a)`
+#' factors, which account for `r scales::percent(sum(pvdat3),accuracy=0.1)` of
+#' the variation explained.
 #+ factorlist
-pander(varsdat3a);
+#pander(varsdat3a);
+pander(faload3a);
 
 # Missing values----
 #' # Charcterize missing values
@@ -118,6 +139,7 @@ pander(varsdat3a);
 #'
 #' ## Method: permutation (Boruta w/ Random Forests) (http://www.jstatsoft.org/v36/i11/)
 #+ borutacalc, cache=debug<=0
+set.seed(project_seed);
 d3boruta0 <- Boruta(RSR ~ ., data=dat3tr);
 d3boruta1 <- TentativeRoughFix(d3boruta0);
 #+ borutaplot, fig.height=14
@@ -196,3 +218,25 @@ full_join(o2,o1,by=c(term='term')) %>%
   select(term,apriori,statistic,medianImp) %>%
   setNames(c('','Manually Chosen','t-Statistic','Boruta Importance')) %>%
   pander(row.names=F,missing='-')
+
+#' # Model Performance
+#'
+#' ## SDI
+#'
+set.seed(project_seed);
+sdi3tr <- train(RSR~sdi_score,data=dat3tr,method='lm'
+                ,trControl=trainControl(method='repeatedcv',number=5,repeats=10));
+sdi3tr;
+plot(dat3tr$RSR~predict(sdi3tr,dat3tr),xlab='Predicted',ylab='Observed');
+#'
+pander(sdi3tr$finalModel,caption='RSR ~ sdi_score');
+#' ## Stepwise
+#'
+set.seed(project_seed);
+aic3tr <- train(aicdat3$call$formula,data=dat3tr,method='lm'
+                ,trControl=trainControl(method='repeatedcv',number=5,repeats=10));
+aic3tr;
+plot(dat3tr$RSR~predict(aic3tr,dat3tr),xlab='Predicted',ylab='Observed');
+#'
+pander(aic3tr$finalModel,caption=aic3tr$call$form %>% eval %>%
+         deparse(width.cutoff = 400));
