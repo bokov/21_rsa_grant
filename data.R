@@ -65,7 +65,19 @@ if(is(out,'try-error')) browser(); out;}
   head(1) %>% names;
 
 # Import data ----
-# Importing the Social Deprivation Index
+# Downloading and importing AHRQ ZCTA data, which presumably we will eventually use
+if(!file.exists('SDOH_ZCTA.rdata')){
+  sdoh0 <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/SDOH_ZCTA_20%d.xlsx',13:18)
+                  ,import,simplify=F);
+  save(sdoh0,file = 'SDOH_ZCTA.rdata');
+} else load('SDOH_ZCTA.rdata');
+# Downloading and importing AHRQ SDOH codebook, which presumably we will eventually use
+if(!file.exists('AHRQ_SDOH_codebook.xlsx')){
+  writeBin(getBinaryURL('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/sdoh_codebook_final.xlsx')
+           ,'AHRQ_SDOH_codebook.xlsx')};
+sdohdct0 <- sapply(paste0('ZCTA_20',13:18),function(xx){
+  import('AHRQ_SDOH_codebook.xlsx',which=xx)},simplify=F);
+# Downloading and importing the Social Deprivation Index
 if(!file.exists('ACS2015_zctaallvars.xlsx')){
   writeBin(getBinaryURL('https://www.graham-center.org/content/dam/rgc/documents/maps-data-tools/sdi/ACS2015_zctaallvars.xlsx'
                         ,ssl.verifypeer=F,ssl.verifyhost=F)
