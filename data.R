@@ -126,6 +126,8 @@ dat1 <- inner_join(dat0,cx0,by="ZCTA") %>%
   mutate(across(v(c_factor,dat=(.)),factor)
          ,sdi_score=ifelse(is.na(sdi_score)
                            ,median(sdi_score,na.rm=T),sdi_score)
+         ,Quartile=cut(RSR,breaks=quantile(RSR,seq(0,1,len=5))
+                       ,include.lowest=T,labels=paste0('Q',1:4))
          ,Quintile=cut(RSR,breaks=quantile(RSR,seq(0,1,len=6))
                        ,include.lowest=T,labels=paste0('Q',1:5))
          ,Decile=cut(RSR,breaks=quantile(RSR,seq(0,1,len=11))
@@ -139,7 +141,7 @@ dct0 <- subset(dct0,column %in% colnames(dat1));
 
 # data prep ----
 # Scale the numeric variables
-dat2 <- select(dat1,-c('YEAR','Quartile',v(c_factor)));
+dat2 <- select(dat1,-c('YEAR','Quartile','Quintile','Decile',v(c_factor)));
 dat2[,sapply(dat2,is.numeric)] <- scale(dat2[,sapply(dat2,is.numeric)]);
 export(dat1,inputdata['dat1']);
 export(dat2,inputdata['dat2']);
