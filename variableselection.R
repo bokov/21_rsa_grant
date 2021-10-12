@@ -219,24 +219,4 @@ full_join(o2,o1,by=c(term='term')) %>%
   setNames(c('','Manually Chosen','t-Statistic','Boruta Importance')) %>%
   pander(row.names=F,missing='-')
 
-#' # Model Performance
-#'
-#' ## SDI
-#'
-set.seed(project_seed);
-sdi3tr <- train(RSR~sdi_score,data=dat3tr,method='lm'
-                ,trControl=trainControl(method='repeatedcv',number=5,repeats=10));
-sdi3tr;
-plot(dat3tr$RSR~predict(sdi3tr,dat3tr),xlab='Predicted',ylab='Observed');
-#'
-pander(sdi3tr$finalModel,caption='RSR ~ sdi_score');
-#' ## Stepwise
-#'
-set.seed(project_seed);
-aic3tr <- train(aicdat3$call$formula,data=dat3tr,method='lm'
-                ,trControl=trainControl(method='repeatedcv',number=5,repeats=10));
-aic3tr;
-plot(dat3tr$RSR~predict(aic3tr,dat3tr),xlab='Predicted',ylab='Observed');
-#'
-pander(aic3tr$finalModel,caption=aic3tr$call$form %>% eval %>%
-         deparse(width.cutoff = 400));
+save.image(file='variableselection.R.rdata');
