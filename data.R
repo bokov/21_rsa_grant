@@ -67,10 +67,10 @@ if(is(out,'try-error')) browser(); out;}
 # Import data ----
 # Downloading and importing AHRQ ZCTA data, which presumably we will eventually use
 if(!file.exists('SDOH_ZCTA.rdata')){
-  sdoh0 <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/SDOH_ZCTA_20%d.xlsx',13:18)
+  sdoh0 <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/SDOH_ZCTA_20%d.xlsx')
                   ,import,simplify=F);
   save(sdoh0,file = 'SDOH_ZCTA.rdata');
-} else load('SDOH_ZCTA.rdata');
+} else sdoh0 <- import('SDOH_ZCTA.rdata');
 # Downloading and importing AHRQ SDOH codebook, which presumably we will eventually use
 if(!file.exists('AHRQ_SDOH_codebook.xlsx')){
   writeBin(getBinaryURL('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/sdoh_codebook_final.xlsx')
