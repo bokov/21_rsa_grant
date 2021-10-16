@@ -20,13 +20,14 @@
 # Init ----
 debug <- 0;
 knitr::opts_chunk$set(echo=debug>0, warning=debug>0, message=debug>0);
-inputdata <- c(dat0='data/SIM_SDOH_ZCTA.xlsx'          # census data by ZCTA
-               ,cx0='data/SIM_ALLCMS.csv'              # RSA-ZCTA crosswalk
-               ,rsa0='data/SIM_RSAv4 SCD RSRs.csv'     # outcomes (RSR)
-               ,dct0='data/data_dictionary.csv'        # data dictionary
-               ,dat1='SDOH_RSR_2013_prelim.csv'        # the dat1 dataset
-               ,dat2='SDOH_RSR_2013_scaled_prelim.csv' # the scaled version of
-);
+inputdata <- c(); source('config.R',local=T,echo = debug>0);
+# inputdata <- c(dat0='data/SIM_SDOH_ZCTA.xlsx'          # census data by ZCTA
+#                ,cx0='data/SIM_ALLCMS.csv'              # RSA-ZCTA crosswalk
+#                ,rsa0='data/SIM_RSAv4 SCD RSRs.csv'     # outcomes (RSR)
+#                ,dct0='data/data_dictionary.csv'        # data dictionary
+#                ,dat1='SDOH_RSR_2013_prelim.csv'        # the dat1 dataset
+#                ,dat2='SDOH_RSR_2013_scaled_prelim.csv' # the scaled version of
+# );
 
 # Load libraries ----
 library(rio); library(dplyr); library(tidbits); # data handling
@@ -48,8 +49,11 @@ panderOptions('table.split.cells',Inf);
 .par_borutaplot <- list(mar=c(0.5, 6, 1, 0.5), mgp=c(0, 0.2, 0), cex=0.9,
                         tcl=0.2);
 # overwrite previously set values if needed
-source('config.R',local=T,echo = debug>0);
-if(file.exists('local.config.R')) source('local.config.R',local=T,echo = debug>0);
+if(file.exists('local.config.R')){
+  source('local.config.R',local=TRUE,echo = debug>0);
+  if(exists('.local.inputdata')){
+    inputdata <- replace(inputdata,names(.local.inputdata),.local.inputdata)};
+};
 
 
 
@@ -57,7 +61,7 @@ if(file.exists('local.config.R')) source('local.config.R',local=T,echo = debug>0
 # if variable selection not already done, run the script that performs it
 if(!file.exists('variableselection.R.rdata')){
   system('R --vanilla -q -s -f variableselection.R',ignore.stdout = debug==0
-         ,ignore.stderr = debug==0)};
+         ,ignore.stderr = debug==0,wait=TRUE,intern=TRUE)};
 load('variableselection.R.rdata');
 
 

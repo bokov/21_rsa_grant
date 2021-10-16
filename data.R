@@ -21,16 +21,19 @@
 # Init ----
 debug <- 0;
 knitr::opts_chunk$set(echo=debug>0, warning=debug>0, message=debug>0);
-inputdata <- c(dat0='data/SIM_SDOH_ZCTA.xlsx'          # census data by ZCTA
-               ,cx0='data/SIM_ALLCMS.csv'              # RSA-ZCTA crosswalk
-               ,rsa0='data/SIM_RSAv4 SCD RSRs.csv'     # outcomes (RSR)
-               ,dct0='data/data_dictionary.csv'        # data dictionary for the
-                                                       # dat1 dataset that _this_
-                                                       # scriport produces
-               ,dat1='SDOH_RSR_201X_prelim.csv'        # the dat1 dataset
-               ,dat2='SDOH_RSR_201X_scaled_prelim.csv' # the scaled version of
-                                                       # dat1
-);
+# Global project settings ----
+inputdata <- c();
+source('config.R',local=T,echo=debug>0);
+# inputdata <- c(dat0='data/SIM_SDOH_ZCTA.xlsx'          # census data by ZCTA
+#                ,cx0='data/SIM_ALLCMS.csv'              # RSA-ZCTA crosswalk
+#                ,rsa0='data/SIM_RSAv4 SCD RSRs.csv'     # outcomes (RSR)
+#                ,dct0='data/data_dictionary.csv'        # data dictionary for the
+#                                                        # dat1 dataset that _this_
+#                                                        # scriport produces
+#                ,dat1='SDOH_RSR_201X_prelim.csv'        # the dat1 dataset
+#                ,dat2='SDOH_RSR_201X_scaled_prelim.csv' # the scaled version of
+#                                                        # dat1
+# );
 
 # Load libraries ----
 library(rio); library(dplyr); library(tidbits);  # data handling
@@ -38,11 +41,13 @@ library(RCurl);
 library(metamedian);                             # median-of-medians01
 
 
-# Project settings ----
-# global project settings
-source('config.R',local=T,echo=debug>0);
-# overwrite previously set values if needed
-if(file.exists('local.config.R')) source('local.config.R',local=T,echo = debug>0);
+# Local project settings ----
+# overwrite previously set global values if needed
+if(file.exists('local.config.R')){
+  source('local.config.R',local=TRUE,echo = debug>0);
+  if(exists('.local.inputdata')){
+    inputdata <- replace(inputdata,names(.local.inputdata),.local.inputdata)};
+};
 
 # Local functions ----
 
@@ -67,7 +72,7 @@ if(is(out,'try-error')) browser(); out;}
 # Import data ----
 # Downloading and importing AHRQ ZCTA data, which presumably we will eventually use
 if(!file.exists('SDOH_ZCTA.rdata')){
-  sdoh0 <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/SDOH_ZCTA_20%d.xlsx')
+  sdoh0 <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/SDOH_ZCTA_20%d.xlsx',11:18)
                   ,import,simplify=F);
   save(sdoh0,file = 'SDOH_ZCTA.rdata');
 } else sdoh0 <- import('SDOH_ZCTA.rdata');

@@ -22,10 +22,19 @@ library('rio');
 # can be obtained via devtools::install_github('bokov/tidbits',ref='integration')
 library('tidbits');
 #' # Config
-source('config.R');
-inputdata <- c(cx0='local/in/ALLCMSv4.csv'
-              ,rsa0='local/in/RSAv4 SCD RSRs 20210625.csv');
-if(file.exists('local.config.R')) source('local.config.R',local=T,echo = debug>0);
+# Global project settings ----
+inputdata <- c();
+source('config.R',local=T,echo=debug>0);
+inputdata['cx0'] <- 'local/in/ALLCMSv4.csv'
+inputdata['rsa0'] <- 'local/in/RSAv4 SCD RSRs 20210625.csv';
+
+# Local project settings ----
+# overwrite previously set global values if needed
+if(file.exists('local.config.R')){
+  source('local.config.R',local=TRUE,echo = debug>0);
+  if(exists('.local.inputdata')){
+    inputdata <- replace(inputdata,names(.local.inputdata),.local.inputdata)};
+};
 
 #' # Import data
 #'
