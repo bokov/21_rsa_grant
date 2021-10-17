@@ -1,3 +1,10 @@
+colorByList <- function(xx
+                        ,colorList=c(red='c_AHRQsocial',blue='c_AHRQecon',green='c_AHRQedu',gold='c_AHRQphysinfr',purple='c_AHRQhealth')
+                        ,template='$\\color{%s}{\\text{%s}}$'){
+  colors <- lapply(colorList,function(yy) eval(parse(text=sprintf('v(var=%s)',yy))));
+  sapply(xx,function(zz) {for(ii in names(colors)) if(zz %in% colors[[ii]]) {zz<-sprintf(template,ii,zz); break;}; return(zz[])});
+}
+
 # AICc ----
 # Source: http://wwwuser.gwdg.de/~cscherb1/stepAICc.txt
 #
