@@ -43,6 +43,8 @@ library(nFactors);                              # optimal number of factors
 panderOptions('table.split.table',Inf);
 panderOptions('table.split.cells',Inf);
 
+source('project_functions.R',local=T,echo = debug>0);
+
 # Local project settings ----
 # tweak base plot settings to avoid captions going off-screen
 .par_default <- par(no.readonly = TRUE);
@@ -64,6 +66,16 @@ if(!file.exists('variableselection.R.rdata')){
          ,ignore.stderr = debug==0,wait=TRUE,intern=TRUE)};
 load('variableselection.R.rdata');
 
+colorizeVars <- cbind(paste0('\\b',dct0$column,'\\b'),colorByList(dct0$column));
+cGroupRename <- cbind(c('c_AHRQsocial','c_AHRQecon','c_AHRQedu','c_AHRQphysinfr'
+                        ,'c_AHRQhealth','c_AHRQgeo')
+                      ,c('Social','Economic','Education'
+                         ,'Physical Infrastructure','Health','Geography'));
+#+ legend
+formals(colorByList)$colorList %>% eval %>%
+  sprintf("[%s]{.%stext}",.,names(.)) %>% submulti(cGroupRename) %>%
+  cbind() %>%
+  pander(col.names='AHRQ Domain Key',justify='left');
 
 # Model performance ----
 #'
@@ -86,8 +98,12 @@ aic3tr <- train(aicdat3$call$formula,data=dat3tr,method='lm'
 aic3tr;
 plot(dat3tr$RSR~predict(aic3tr,dat3tr),xlab='Predicted',ylab='Observed');
 #'
-pander(aic3tr$finalModel,caption=aic3tr$call$form %>% eval %>%
-         deparse(width.cutoff = 400));
+pander(aic3tr$finalModel
+       ,caption = paste0('RSR ~ '
+                         ,submulti(as.character(terms(aic3tr$finalModel))[3] %>% gsub('`','',.)
+                                   ,colorizeVars)));
+       # ,caption=aic3tr$call$form %>% eval %>%
+       #   deparse(width.cutoff = 400));
 
 #' # Manually Chosen
 #'
@@ -98,8 +114,12 @@ exp3tr <- train(lmstartdat3$call$formula,data=dat3tr,method='lm'
 exp3tr;
 plot(dat3tr$RSR~predict(exp3tr,dat3tr),xlab='Predicted',ylab='Observed');
 #'
-pander(exp3tr$finalModel,caption=exp3tr$call$form %>% eval %>% deparse %>%
-         paste0(collapse=''));
+pander(exp3tr$finalModel
+       ,caption = paste0('RSR ~ '
+                         ,submulti(as.character(terms(exp3tr$finalModel))[3] %>% gsub('`','',.)
+                                   ,colorizeVars)));
+       # ,caption=exp3tr$call$form %>% eval %>% deparse %>%
+       #   paste0(collapse=''));
 #' # Using Factor Analysis
 
 dat3trfa <- data.frame(RSR=dat3tr$RSR,fa3$scores);

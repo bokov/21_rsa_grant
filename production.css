@@ -171,6 +171,13 @@ p.abstract:after {
   */
 }
 
+.redtext {color: #F00;}
+.bluetext {color: #00F;}
+.greentext {color: #277014;}
+.orangetext {color: #FFA500;}
+.purpletext {color: #800080;}
+.browntext {color: #D2691E;}
+
 .note2self {
   background-color: #FF0;
 }

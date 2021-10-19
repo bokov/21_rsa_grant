@@ -44,7 +44,8 @@ library(nFactors);                              # optimal number of factors
 # Make tables never split
 panderOptions('table.split.table',Inf);
 panderOptions('table.split.cells',Inf);
-
+panderOptions('p.copula',', ');
+options(tinytex.verbose=TRUE)
 # Get stepAICc (like stepAIC but adjusting for small sample sizes)
 source('project_functions.R');
 
@@ -76,6 +77,19 @@ dct0 <- subset(dct0,column %in% colnames(dat1));
 dat3tr <- subset(dat2,subsample=='train') %>% select(where(is.numeric));
 dat3ts <- subset(dat2,subsample=='test') %>% select(where(is.numeric));
 
+colorizeVars <- cbind(dct0$column,colorByList(dct0$column,template='[%2$s]{.%1$stext}'));
+cGroupRename <- cbind(c('c_AHRQsocial','c_AHRQecon','c_AHRQedu','c_AHRQphysinfr'
+                        ,'c_AHRQhealth','c_AHRQgeo')
+                      ,c('Social','Economic','Education'
+                         ,'Physical Infrastructure','Health','Geography'));
+#'
+#' ----
+formals(colorByList)$colorList %>% eval %>%
+  sprintf("[%s]{.%stext}",.,names(.)) %>% submulti(cGroupRename) %>%
+  cbind() %>%
+  pander(col.names='AHRQ Domain Key',justify='left');
+#' ----
+#'
 # factor analysis ----
 #' # How many factors to use?
 #'
@@ -98,12 +112,18 @@ set.seed(project_seed);
 #                    ,nstart=8,scores='regression',rotation='varimax');
 #
 fa3 <-fa(select(dat3tr,-RSR),nfactors = fapar3$nfact,rotate='varimax',fm='ml') %>% fa.sort();
-faload3 <- with(fa3,{
-  cn<-colnames(loadings); expr <- embed(cn,2) %>%
-    apply(1,function(xx) sprintf("abs(%s)>abs(%s)~'%s'",xx[2],xx[1],xx[2])) %>%
-    c(sprintf("TRUE~'%s'",tail(cn,1))) %>% paste0(collapse=',') %>%
-    sprintf('case_when(%s)',.) %>% parse(text=.) %>%
-    eval(as.data.frame(loadings[])) %>% split(rownames(loadings),.)});
+# faload3 <- with(fa3,{
+
+#   cn<-colnames(loadings); expr <- embed(cn,2) %>%
+#     apply(1,function(xx) sprintf("abs(%s)>abs(%s)~'%s'",xx[2],xx[1],xx[2])) %>%
+#     c(sprintf("TRUE~'%s'",tail(cn,1))) %>% paste0(collapse=',') %>%
+#     sprintf('case_when(%s)',.) %>% parse(text=.) %>%
+#     eval(as.data.frame(loadings[])) %>% split(rownames(loadings),.)});
+faload3 <- fa3$loadings[];
+faload3[faload3<0.4] <- NA;
+faload3 <- apply(faload3,2,function(xx) names(na.omit(xx)),simplify = F) %>%
+  Filter(function(xx) length(xx)>0,.);
+
 #+ faplot, fig.width=10
 pvdat3 <- with(fa3,Vaccounted['Proportion Explained'
                               ,intersect(colnames(Vaccounted), names(faload3))]);
@@ -118,14 +138,26 @@ par(.par_default);
 # varsdat3a <- lapply(varsdat3,function(xx) base::ifelse(xx %in% v(c_domainexpert)
 #                                                        ,pander::wrap(xx,'**'),xx)) ;
 faload3a <- lapply(faload3,function(xx) base::ifelse(xx %in% v(c_domainexpert)
-                                                     ,pander::wrap(xx,'**'),xx));
+                                                     ,gsub('\\[(.*)\\]','[**\\1**]',colorByList(xx))
+                                                     ,colorByList(xx)));
+                                                     #,pander::wrap(xx,'**'),xx)
+ahrqvars <- v() %>% grep('c_AHRQ',.,val=T) %>%
+  sapply(function(xx) sprintf('v(%s)',xx) %>% parse(text=.) %>% eval);
+names(ahrqvars) <- submulti(names(ahrqvars),cGroupRename);
+faload3b <- sapply(faload3,function(xx) lapply(ahrqvars,function(yy) {
+  oo<-intersect(xx,yy);
+  ifelse(oo %in% v(c_domainexpert)
+         , gsub('\\[(.*)\\]','[**\\1**]',colorByList(oo))
+         ,colorByList(oo))}) %>%
+    Filter(function(zz) length(zz)>0,.) ,simplify = F);
+#  submulti(colorizeVars));
 #message('About to print factors');
 #' All the numeric variables are represented in the first `r length(faload3a)`
 #' factors, which account for `r scales::percent(sum(pvdat3),accuracy=0.1)` of
 #' the variation explained.
 #+ factorlist
 #pander(varsdat3a);
-pander(faload3a);
+pander(faload3b);
 
 # Missing values----
 #' # Charcterize missing values
@@ -166,15 +198,16 @@ axis(2,at=.borutapos,labels=.borutanames0[.borutapos],font = 2,las=2
 segments(-20,.borutapos,.borutameds[.borutatf],col="#9400D350",lwd=8);
 #abline(h=.borutapos,lty=3);
 par(.par_default);
-#' ## Method: stepwise bidirectional selection
-#'
+# ## Method: stepwise bidirectional selection
+#
 # Have to exclude CN, possibly only in the sim data. Also have to exclude STATE
 # because otherwise hard to interpret in a linear model.
 #' ### The _a priori_ model based on domain knowledge
 #'
-frm_exp0 <- paste(v(c_domainexpert,dat3tr),collapse='+') %>% paste('RSR ~',.) %>%
+frm_exp0 <- paste(v(c_domainexpert,dat3tr),collapse=' + ') %>% paste('RSR ~ ',.) %>%
   as.formula(env = NULL);
-pander(frm_exp0);
+frm_display <- paste(colorByList(v(c_domainexpert,dat3tr)),collapse=' + ') %>% paste('RSR ~',.);
+pander(frm_display);
 #+ stepaic, results='hide', cache=debug<=0
 lmbasedat3 <- lm(RSR~1,data=dat3tr);
 lmstartdat3 <- update(lmbasedat3,formula=frm_exp0);
@@ -185,6 +218,7 @@ lmalldat3 <- lm(RSR~(.)^2,data=dat3tr);
 # stepAICc select exactly the same model. A big part of our goal here is just
 # to get rid of collinear variables in a principled manner.
 #
+set.seed(project_seed);
 aicdat3 <- stepAICc(lmstartdat3,scope=list(lower=lmbasedat3,upper=lmalldat3)
                 ,direction='both',k=log(nrow(dat3tr)));
 
@@ -197,22 +231,22 @@ o2 <- attStats(d3boruta1) %>%
   subset(.,decision!='Rejected'|rownames(.) %in% c(o1$term,v(c_domainexpert))) %>%
   arrange(desc(medianImp)) %>% select(medianImp) %>%
   tibble::rownames_to_column('term');
-#' ### The following variables were chosen by both methods:
+#' ### The following variables were chosen by both random-forests and stepwise selection:
 #+ allmethods
 .allmethods <- intersect(o1$term,o2$term) %>%
-  ifelse(. %in% v(c_domainexpert),pander::wrap(.,'**'),.);
+  ifelse(. %in% v(c_domainexpert),pander::wrap(colorByList(.),'**'),.);
 if(length(.allmethods)>0) pander(.allmethods) else pander('None');
 #'
-#' ### The following variables were chosen by stepwise elimination only:
+#' ### The following variables were chosen by stepwise selection only:
 #+ swonly
 .swonly <- setdiff(o1$term,o2$term) %>%
   ifelse(. %in% v(c_domainexpert),pander::wrap(.,'**'),.);
 if(length(.swonly)>0) pander(.swonly) else pander('None');
 #'
-#' ### The following variables were chosen by Boruta/random-forest only:
+#' ### The following variables were chosen by random-forests only:
 #+ rfonly
 .rfonly <- setdiff(o2$term,o1$term) %>%
-  ifelse(. %in% v(c_domainexpert),pander::wrap(.,'**'),.);
+  ifelse(. %in% v(c_domainexpert),pander::wrap(colorByList(.),'**'),.);
 if(length(.rfonly)>0) pander(.rfonly) else pander('None');
 #'
 #' ### Here is a table of all variables selected by either method:
