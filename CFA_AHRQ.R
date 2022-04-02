@@ -134,8 +134,10 @@ if(file.exists('data/AHRQmi.rdata')){
 pander(head(AHRQmi,20),row.names=F);
 #'
 #' # Path Plot
-#+ SEMplot, cache=T, fig.asp=4, fig.width=4
-semPlot::semPaths(AHRQfit,'std',rotation = 2,vTrans=10,borders=F,residuals = F,curvature = 4, nCharNodes=10);
+#+ SEMplot, cache=T, fig.asp=4, fig.width=16
+semPlot::semPaths(AHRQfit,'std',rotation = 2,vTrans=10,borders=F
+                  ,residuals = F,curvature = 3, nCharNodes=15
+                  ,mar=c(3,30,3,3));
 semCors(AHRQfit,titles=T,vertical=F);
 #'
 #' # Comparison to Orthogonal Model
