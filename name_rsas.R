@@ -155,16 +155,18 @@ cx5 <- bind_rows(cxmetro2,cxmetro3) %>%
 # Test to ensure that the populations held up
 stopifnot(sum(cx5$POP)==sum(subset(zippop,ZIPCODE %in% cx5$ZIPCODE)$POP));
 
-# This is the regexp that matches all of label0:
+# This is the regexp that matches all of label0 (might be handy for QC/debugging)
 label0rx <- "^[ñA-Za-z -;]+, [A-Z]{2}(?:[-;][A-Z]{2})*(?: \\[[A-Za-z;]+\\])?(?: \\[[A-Za-z;]+\\])?(?: \\d+)?$";
-# This would clean up semicolon-delimited states: gsub("(?<=\\b[A-Z]{2});(?=[A-Z]{2}\\b)","-",perl=T,cnlabels$label0)
 
 # This is for moving the states to the front.
 states2frontrx <- "^(.*?), ([A-Z]{2}(?:[-;][A-Z]{2})*) (.*)$"
-# Rearrange string components by reordering capture groups
 
-
-cnlabels <- group_by(cx5,CN) %>% summarise(
+# reusable code to deduplicate the various columns, weight them by population
+# (split up in as many equal pieces as there were duplictations of those zipcodes)
+# find the plurality value or values, and collapse it/them into one string.
+#
+# I.e. this is the part where most of the sorcery happens.
+fn_final_labels <- . %>% summarise(
   across(!where(is.numeric),~fn_plurality(.x,ignore = ''))) %>%
   mutate(
     #across(starts_with('CountyName'),~gsub(';','-',.x))
@@ -192,10 +194,22 @@ cnlabels <- group_by(cx5,CN) %>% summarise(
   ) %>% group_by(label0) %>%
   mutate(seqid = seq_len(n())
          ,label0 = if(n()==1) label0 else paste0(label0,' ',seqid)
+         # Rearrange string components by reordering capture groups from states2frontrx
          ,label1 = gsub(states2frontrx, "\\2, \\1 \\3", label0)
          );
 
-# Might want to replace Central;Outlying with 'Spanning'
+# Here we apply the above code to generate plurality values for everything
+# on the CN level. Then, we do the same at the ZCTA and ZIP levels but we don't
+# use the ZCTA or ZIP versions of the names, we copy over the names from the CN
+# level, repeating them for every zipcode or ZCTA that is in the same CN.
+cnlabels <-list();
+cnlabels$labels_cn <- group_by(cx5,CN) %>% fn_final_labels();
+cnlabels$labels_zcta <- group_by(cx5,ZCTA) %>% fn_final_labels() %>%
+  ungroup %>% dplyr::select(!matches('label|seqid')) %>%
+  left_join(cnlabels$labels_cn[,c('CN','label0','label1')]);
+cnlabels$labels_zip <- group_by(cx5,ZIP) %>% fn_final_labels() %>%
+  ungroup %>% dplyr::select(!matches('label|seqid')) %>%
+  left_join(cnlabels$labels_cn[,c('CN','label0','label1')]);
 
 
 # duplication/uniqueness report
@@ -207,5 +221,6 @@ sapply(cnlabels,function(xx) {
     ,nondups=sum(!(duplicated(xx)|duplicated(xx,fromLast=T)))
     ,aug_nondups=sum(!(duplicated(xx_augmented)|duplicated(xx_augmented,fromLast=T))))})
 
-export(cnlabels,file='data/RSA_labels.csv');
+export(cnlabels,file='data/RSA_labels.xlsx');
+
 c()
