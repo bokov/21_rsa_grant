@@ -76,19 +76,32 @@ if(!file.exists('SDOH_ZCTA.rdata')){
                   ,import,simplify=F);
   save(sdoh0,file = 'SDOH_ZCTA.rdata');
 } else sdoh0 <- import('SDOH_ZCTA.rdata');
+
+if(!file.exists('SDOH_ZIP.rdata')){
+  sdohzip <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_20%d_ZIPCODE_1_0.xlsx',11:20)
+                  ,import,which='Data',simplify=F);
+  save(sdohzip,file = 'SDOH_ZIP.rdata');
+} else sdohzip <- import('SDOH_ZIP.rdata');
+
+
+sdohdctzip <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_20%d_Codebook_1_0.xlsx',11:20)
+                     ,import,which='ZIPCODE',simplify=F)
+
 # Downloading and importing AHRQ SDOH codebook, which presumably we will eventually use
 if(!file.exists('AHRQ_SDOH_codebook.xlsx')){
   writeBin(getBinaryURL('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/sdoh_codebook_final.xlsx')
            ,'AHRQ_SDOH_codebook.xlsx')};
 sdohdct0 <- sapply(paste0('ZCTA_20',13:18),function(xx){
   import('AHRQ_SDOH_codebook.xlsx',which=xx)},simplify=F);
+
+
 # Downloading and importing the Social Deprivation Index
 if(!file.exists('ACS2015_zctaallvars.xlsx')){
   writeBin(getBinaryURL('https://www.graham-center.org/content/dam/rgc/documents/maps-data-tools/sdi/ACS2015_zctaallvars.xlsx'
                         ,ssl.verifypeer=F,ssl.verifyhost=F)
            ,'ACS2015_zctaallvars.xlsx')};
 sdi <- import('ACS2015_zctaallvars.xlsx') %>%
-  mutate(ZCTA=as.character(zcta)) %>% select(-'zcta') %>%
+  mutate(ZCTA=sprintf("%05d", zcta)) %>% select(-'zcta') %>%
   subset(!is.na(sdi_score));
 # Importing the local data files
 dat0 <- import(inputdata['dat0']);
@@ -146,7 +159,7 @@ dct0 <- subset(dct0,column %in% colnames(dat1));
 
 # data prep ----
 # Scale the numeric variables
-dat2 <- select(dat1,-c('YEAR','Quartile','Quintile','Decile',v(c_factor)));
+dat2 <- select(dat1,-c('YEAR','Quartile','Quintile','Decile',v(c_factor),'subsample'),CN);
 dat2[,sapply(dat2,is.numeric)] <- scale(dat2[,sapply(dat2,is.numeric)]);
 export(dat1,inputdata['dat1']);
 export(dat2,inputdata['dat2']);
