@@ -71,7 +71,7 @@ if(file.exists('local.config.R')){
 if(!all(file.exists(inputdata[c('dat1','dat2')]))){
   system('R --vanilla -q -s -f data.R',ignore.stdout = debug==0,ignore.stderr = debug==0, wait=TRUE,intern=TRUE)};
 dat1 <- import(inputdata['dat1']);
-dat2 <- import(inputdata['dat2']);
+dat2 <- import(inputdata['dat2']) %>% mutate(subsample=sample(c('train','test'),size=n(),rep=T));
 dct0 <- import(inputdata['dct0']);
 dct0 <- subset(dct0,column %in% colnames(dat1));
 # Obtain the numeric-only columns as dat3tr and dat3ts for training and test
