@@ -28,7 +28,10 @@ library(rio); library(dplyr); library(tidbits);  # data handling
 library(DescTools);                              # some useful commands
 library(RCurl);
 #library(metamedian);                             # median-of-medians01
+library(stringdist);                             # to find closest matching names
 
+sdohzipselected <- 'https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_2018_ZIPCODE_1_0.xlsx';
+sdohzctaselected <- 'https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/SDOH_ZCTA_2018.xlsx';
 
 # Local project settings ----
 # overwrite previously set global values if needed
@@ -40,6 +43,7 @@ if(file.exists('local.config.R')){
     inputdata <- replace(inputdata,names(.local.inputdata),.local.inputdata)};
 };
 
+# custom functions ----
 fn_modalvals <- function(xx,collapse=';'){
   paste0(sort(if(anyDuplicated(xx)==0) xx else Mode(xx,na.rm=T)),collapse=collapse)
 };
@@ -60,14 +64,17 @@ fn_plurality <- function(xx,weights='POP',collapse='-',ignore=c(weights,'CN'),mi
 fn_automapper <- . %>% gsub('STAMP','STMP',.) %>% gsub('TOTAL','TOT',.) %>%
   gsub('INCOME','INC',.) %>% gsub('RENTED','RENTER',.) %>%
   gsub('OWNED','OWNER',.) %>% gsub('VA_','VET_',.) %>% gsub('POOR','POV',.) %>%
-  gsub('^ACS_PCT_|_ZC$','',.);
+  gsub('^ACS_PCT_|^ACS_MEDIAN_|_ZC$|_18_64_ZC$','',.) %>%
+  gsub('^ACS_','',.) %>% gsub('_MEDIAN_','',.) %>%
+  gsub('^CCBP_RATE','CCBP_TOT',.) %>% gsub('_PER_1000','_ZP',.) %>%
+  gsub('_BELOW64','64',.) %>% gsub('CFHEORS','EORS',.);
 
-
+fn_zapambiguous <- function(xx) ifelse(xx>min(xx,na.rm=T),NA,xx);
 # Import data ----
 
 #' Downloading and importing AHRQ ZCTA data (beta, deprecated)
 if(!all(file.exists(c('data/SDOH_ZCTA.rdata','data/SDOH_ZIP.rdata')))) system('R download_data.R',wait=T);
-#sdohzcta <- import('data/SDOH_ZCTA.rdata');
+sdohzcta <- import('data/SDOH_ZCTA.rdata');
 sdohzip <- import('data/SDOH_ZIP.rdata');
 #sdohrsazip <- import(sprintf('data/RSA_SDOH_%s_ZIPCODE_1_0.csv',sdohyear));
 sdohrsazip <- sdohzip$`https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_2020_ZIPCODE_1_0.xlsx` ;
@@ -222,5 +229,55 @@ sapply(cnlabels,function(xx) {
     ,aug_nondups=sum(!(duplicated(xx_augmented)|duplicated(xx_augmented,fromLast=T))))})
 
 export(cnlabels,file='data/RSA_labels.xlsx');
+
+# old2new name mapping ----
+# Old ZCTA column names to new ZIP column names
+newnames <- names(sdohzip[[sdohzipselected]]) %>%
+  setdiff(c('YEAR','ZCTA','STATE','REGION',if(exists('colmap')) colmap else c()));
+newnames_std <- fn_automapper(newnames);
+oldnames <- names(sdohzcta[[sdohzctaselected]]) %>%
+  setdiff(c('YEAR','ZCTA','STATE','REGION',if(exists('colmap')) names(colmap) else c()));
+oldnames_std <- fn_automapper(oldnames);
+matched_names_std <- intersect(newnames_std,oldnames_std);
+old2new <- data.frame(oldnames,oldnames_std
+                      ,pass0=ifelse(oldnames_std %in% matched_names_std,oldnames_std,NA));
+
+newnames_unmatched_std <- setdiff(newnames_std,matched_names_std);
+
+fn_closestmatch <- function(fullinput,alreadymatched,matchto){
+  matchfrom <- fullinput[is.na(alreadymatched)];
+  matchto <- setdiff(matchto,alreadymatched);
+  closestmatch <- stringdistmatrix(fullinput,matchto) %>%
+    apply(1,fn_zapambiguous) %>% apply(1,fn_zapambiguous);
+  closestmatch[,colSums(!is.na(closestmatch))>1] <- NA;
+  closestmatch[rowSums(!is.na(closestmatch))>1,] <- NA;
+  closestunique <- apply(closestmatch,1
+                         ,function(xx){
+                           if(all(is.na(xx))) NA else matchto[!is.na(xx)]
+                         });
+  alreadymatched[is.na(alreadymatched)] <- closestunique;
+  alreadymatched;
+}
+
+closestmatch <- stringdistmatrix(old2new$oldnames_std,newnames_unmatched_std) %>%
+  apply(1,fn_zapambiguous) %>% apply(1,fn_zapambiguous);
+closestmatch[,colSums(!is.na(closestmatch))>1] <- NA;
+closestmatch[rowSums(!is.na(closestmatch))>1,] <- NA;
+old2new$pass0 <- apply(closestmatch,1
+                       ,function(xx){
+                         if(all(is.na(xx))) NA else newnames_unmatched_std[!is.na(xx)]
+                         });
+
+  apply(1,function(xx) newnames_unmatched_std[which(xx==min(xx))]) %>%
+  setNames(old2new$oldnames_std);
+closestsinglematch <- Filter(function(xx) length(xx)==1,closestmatch) %>% unlist;
+old2new$newnames_std <- closestsinglematch[old2new$oldnames_std];
+newnames_unmatched_std0 <- setdiff(newnames_unmatched_std,old2new$newnames_std);
+
+closestmatch0 <- subset(old2new,is.na(newnames_std))$oldnames_std %>% stringdistmatrix(.,newnames_unmatched_std0) %>%
+  apply(1,function(xx) newnames_unmatched_std0[which(xx==min(xx))]) %>%
+  setNames(subset(old2new,is.na(newnames_std))$oldnames_std) %>%
+  Filter(function(xx) length(xx)>1,.) %>% unlist;
+
 
 c()
