@@ -55,6 +55,7 @@ if(!file.exists('data/SDOH_ZCTA.rdata')){
                   ,function(xx){
                     xxtemp <- file.path(tempdir(),basename(xx));
                     download.file(xx,destfile = xxtemp);
+                    Sys.sleep(30); #20 was too short
                     import(xxtemp);
                     },simplify=F);
   failed<-Filter(function(xx) is(xx,'try-error'),sdohzcta) %>% names()
@@ -82,6 +83,7 @@ if(!file.exists('data/SDOH_ZIP.rdata')){
                     ,function(xx){
                       xxtemp <- file.path(tempdir(),basename(xx));
                       download.file(xx,destfile = xxtemp);
+                      Sys.sleep(30);
                       try(import(xxtemp,which='Data'));
                     },simplify=F);
   # Save the R object containing all available SDOH files
