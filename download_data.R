@@ -40,6 +40,10 @@ if(file.exists('local.config.R')){
     inputdata <- replace(inputdata,names(.local.inputdata),.local.inputdata)};
 };
 
+# Set because apparently now AHRQ wants to prevent tax-funded scientists from
+# accessing their data programmatically. Shame on them.
+options(HTTPUserAgent = useragent);
+
 fn_modalvals <- function(xx,collapse=';'){
   paste0(sort(if(anyDuplicated(xx)==0) xx else Mode(xx,na.rm=T)),collapse=collapse)
   };
@@ -48,13 +52,20 @@ fn_modalvals <- function(xx,collapse=';'){
 #' Downloading and importing AHRQ ZCTA data (beta, deprecated)
 if(!file.exists('data/SDOH_ZCTA.rdata')){
   sdohzcta <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/SDOH_ZCTA_20%d.xlsx',11:18)
-                  ,import,simplify=F);
-  save(sdohzcta,file = 'data/SDOH_ZCTA.rdata');
+                  ,function(xx){
+                    xxtemp <- file.path(tempdir(),basename(xx));
+                    download.file(xx,destfile = xxtemp);
+                    import(xxtemp);
+                    },simplify=F);
+  failed<-Filter(function(xx) is(xx,'try-error'),sdohzcta) %>% names()
+  if(length(failed)>0){
+    message('The following files failed to download likely due to bandwidth throttling. Please download them manually:\n',paste0(failed,collapse='\n'));
+  } else save(sdohzcta,file = 'data/SDOH_ZCTA.rdata');
 } else if(debug) sdohzcta <- import('data/SDOH_ZCTA.rdata');
 # Downloading and importing AHRQ SDOH codebook (beta, deprecated)
 if(!file.exists('AHRQ_SDOH_codebook.xlsx')){
-  writeBin(getBinaryURL('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/sdoh_codebook_final.xlsx')
-           ,'AHRQ_SDOH_codebook.xlsx')};
+  #writeBin(getBinaryURL('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/sdoh_codebook_final.xlsx'),'AHRQ_SDOH_codebook.xlsx');
+  download.file('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/sdoh_codebook_final.xlsx',destfile = 'AHRQ_SDOH_codebook.xlsx')};
 sdohdctzcta <- sapply(paste0('ZCTA_20',13:18),function(xx){
   import('AHRQ_SDOH_codebook.xlsx',which=xx)},simplify=F);
 #' Obtain the CN/RSA - ZCTA mappings
@@ -68,9 +79,16 @@ colmap <- import(inputdata['colmap']) %>% with(setNames(new,old));
 #' Download and import AHRQ ZIPCODE SDOH data (current version)
 if(!file.exists('data/SDOH_ZIP.rdata')){
   sdohzip <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_20%d_ZIPCODE_1_0.xlsx',11:20)
-                    ,import,which='Data',simplify=F) ;
+                    ,function(xx){
+                      xxtemp <- file.path(tempdir(),basename(xx));
+                      download.file(xx,destfile = xxtemp);
+                      try(import(xxtemp,which='Data'));
+                    },simplify=F);
   # Save the R object containing all available SDOH files
-  save(sdohzip,file = 'data/SDOH_ZIP.rdata');
+  failed<-Filter(function(xx) is(xx,'try-error'),sdohzip) %>% names()
+  if(length(failed)>0){
+    essage('The following files failed to download likely due to bandwidth throttling. Please download them manually:\n',paste0(failed,collapse='\n'));
+  } else save(sdohzip,file = 'data/SDOH_ZIP.rdata');
 } else sdohzip <- import('SDOH_ZIP.rdata');
 
 # Identify the SDOH file for the year we will be using, to save separately.
@@ -95,10 +113,13 @@ message('Analysis-ready file has been saved to ',normalizePath(sdohrsazipfilenam
 
 
 #' Downloading and importing AHRQ SDOH codebook (current version)
-sdohdctzip <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_20%d_Codebook_1_0.xlsx',11:20)
-                     ,import,which='ZIPCODE',simplify=F);
-
-
-
+sdohdctzip0 <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_20%d_Codebook_1_0.xlsx',11:20)
+                     ,function(xx){
+                       xxtemp <- file.path(tempdir(),basename(xx));
+                       download.file(xx,destfile = xxtemp);
+                       try(import(xxtemp,which='ZIPCODE'));
+                     },simplify=F);
+failed<-Filter(function(xx) is(xx,'try-error'),sdohdctzip0) %>% names()
+if(length(failed)>0) message('The following files failed to download likely due to bandwidth throttling. Please download them manually:\n',paste0(failed,collapse='\n'))
 
 c()

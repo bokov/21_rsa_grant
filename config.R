@@ -2,6 +2,8 @@ project_seed <- 2021091045;
 
 sdohyear <- '2020';
 
+useragent <- 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0';
+
 inputdata <- c(dat0= 'data/SIM_SDOH_ZCTA.xlsx'         # census data by ZCTA
                ,cx0= 'data/SIM_ALLCMS.csv'             # RSA-ZCTA crosswalk
                ,rsa0='data/SIM_RSAv4 SCD RSRs.csv'     # outcomes (RSR)
