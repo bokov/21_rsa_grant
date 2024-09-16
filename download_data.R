@@ -22,6 +22,7 @@ knitr::opts_chunk$set(echo=debug>0, warning=debug>0, message=debug>0);
 # Global project settings ----
 inputdata <- c();
 source('config.R',local=T,echo=debug>0);
+throttle <- 60; # the amount of time to wait between downloads to avoid being cancelled
 
 # Load libraries ----
 library(rio); library(dplyr); library(tidbits);  # data handling
@@ -55,7 +56,7 @@ if(!file.exists('data/SDOH_ZCTA.rdata')){
                   ,function(xx){
                     xxtemp <- file.path(tempdir(),basename(xx));
                     download.file(xx,destfile = xxtemp);
-                    Sys.sleep(30); #20 was too short
+                    Sys.sleep(throttle); #20 was too short
                     import(xxtemp);
                     },simplify=F);
   failed<-Filter(function(xx) is(xx,'try-error'),sdohzcta) %>% names()
@@ -66,6 +67,7 @@ if(!file.exists('data/SDOH_ZCTA.rdata')){
 # Downloading and importing AHRQ SDOH codebook (beta, deprecated)
 if(!file.exists('AHRQ_SDOH_codebook.xlsx')){
   #writeBin(getBinaryURL('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/sdoh_codebook_final.xlsx'),'AHRQ_SDOH_codebook.xlsx');
+  Sys.sleep(throttle);
   download.file('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/sdoh_codebook_final.xlsx',destfile = 'AHRQ_SDOH_codebook.xlsx')};
 sdohdctzcta <- sapply(paste0('ZCTA_20',13:18),function(xx){
   import('AHRQ_SDOH_codebook.xlsx',which=xx)},simplify=F);
@@ -82,8 +84,8 @@ if(!file.exists('data/SDOH_ZIP.rdata')){
   sdohzip <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_20%d_ZIPCODE_1_0.xlsx',11:20)
                     ,function(xx){
                       xxtemp <- file.path(tempdir(),basename(xx));
+                      Sys.sleep(throttle);
                       download.file(xx,destfile = xxtemp);
-                      Sys.sleep(30);
                       try(import(xxtemp,which='Data'));
                     },simplify=F);
   # Save the R object containing all available SDOH files
@@ -118,6 +120,7 @@ message('Analysis-ready file has been saved to ',normalizePath(sdohrsazipfilenam
 sdohdctzip0 <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_20%d_Codebook_1_0.xlsx',11:20)
                      ,function(xx){
                        xxtemp <- file.path(tempdir(),basename(xx));
+                       Sys.sleep(throttle);
                        download.file(xx,destfile = xxtemp);
                        try(import(xxtemp,which='ZIPCODE'));
                      },simplify=F);
