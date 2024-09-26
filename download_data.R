@@ -29,7 +29,12 @@ library(rio); library(dplyr); library(tidbits);  # data handling
 library(DescTools);                              # some useful commands
 library(RCurl);
 #library(metamedian);                             # median-of-medians01
+old_data_years <- 18:11;
+new_data_years <- 20:11;
 
+# Set because apparently now AHRQ wants to prevent tax-funded scientists from
+# accessing their data programmatically. Shame on them.
+options(HTTPUserAgent = useragent);
 
 # Local project settings ----
 # overwrite previously set global values if needed
@@ -41,9 +46,7 @@ if(file.exists('local.config.R')){
     inputdata <- replace(inputdata,names(.local.inputdata),.local.inputdata)};
 };
 
-# Set because apparently now AHRQ wants to prevent tax-funded scientists from
-# accessing their data programmatically. Shame on them.
-options(HTTPUserAgent = useragent);
+dir.create(download_dir,recursive = T,showWarnings = F);
 
 fn_modalvals <- function(xx,collapse=';'){
   paste0(sort(if(anyDuplicated(xx)==0) xx else Mode(xx,na.rm=T)),collapse=collapse)
@@ -52,24 +55,25 @@ fn_modalvals <- function(xx,collapse=';'){
 
 #' Downloading and importing AHRQ ZCTA data (beta, deprecated)
 if(!file.exists('data/SDOH_ZCTA.rdata')){
-  sdohzcta <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/SDOH_ZCTA_20%d.xlsx',11:18)
+  sdohzcta <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/SDOH_ZCTA_20%d.xlsx',old_data_years)
                   ,function(xx){
-                    xxtemp <- file.path(tempdir(),basename(xx));
-                    download.file(xx,destfile = xxtemp);
-                    Sys.sleep(throttle); #20 was too short
-                    import(xxtemp);
+                    xxtemp <- file.path(download_dir,basename(xx));
+                    if(!file.exists(xxtemp)){
+                      download.file(xx,destfile = xxtemp);
+                      Sys.sleep(throttle); #20 was too short
+                    }
+                    try(import(xxtemp));
                     },simplify=F);
   failed<-Filter(function(xx) is(xx,'try-error'),sdohzcta) %>% names()
-  if(length(failed)>0){
-    message('The following files failed to download likely due to bandwidth throttling. Please download them manually:\n',paste0(failed,collapse='\n'));
-  } else save(sdohzcta,file = 'data/SDOH_ZCTA.rdata');
+  if(length(failed)==0) save(sdohzcta,file = 'data/SDOH_ZCTA.rdata');
 } else if(debug) sdohzcta <- import('data/SDOH_ZCTA.rdata');
+
 # Downloading and importing AHRQ SDOH codebook (beta, deprecated)
 if(!file.exists('AHRQ_SDOH_codebook.xlsx')){
   #writeBin(getBinaryURL('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/sdoh_codebook_final.xlsx'),'AHRQ_SDOH_codebook.xlsx');
-  Sys.sleep(throttle);
   download.file('https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/sdoh_codebook_final.xlsx',destfile = 'AHRQ_SDOH_codebook.xlsx')};
-sdohdctzcta <- sapply(paste0('ZCTA_20',13:18),function(xx){
+
+sdohdctzcta <- sapply(paste0('ZCTA_20',old_data_years),function(xx){
   import('AHRQ_SDOH_codebook.xlsx',which=xx)},simplify=F);
 #' Obtain the CN/RSA - ZCTA mappings
 cx0 <- import(inputdata['cx0']);
@@ -81,17 +85,24 @@ colmap <- import(inputdata['colmap']) %>% with(setNames(new,old));
 
 #' Download and import AHRQ ZIPCODE SDOH data (current version)
 if(!file.exists('data/SDOH_ZIP.rdata')){
-  sdohzip <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_20%d_ZIPCODE_1_0.xlsx',11:20)
+  sdohzip <- sapply(sprintf('https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_20%d_ZIPCODE_1_0.xlsx',new_data_years)
                     ,function(xx){
-                      xxtemp <- file.path(tempdir(),basename(xx));
-                      Sys.sleep(throttle);
-                      download.file(xx,destfile = xxtemp);
+                      xxtemp <- file.path(download_dir,basename(xx));
+                      if(!file.exists(xxtemp)){
+                        download.file(xx,destfile = xxtemp);
+                        Sys.sleep(throttle); #20 was too short
+                      }
                       try(import(xxtemp,which='Data'));
                     },simplify=F);
-  # Save the R object containing all available SDOH files
-  failed<-Filter(function(xx) is(xx,'try-error'),sdohzip) %>% names()
+  # Save the R object containing all available SDOH new-version files
+  failed<-Filter(function(xx) is(xx,'try-error'),sdohzip) %>% names() %>% c(failed);
   if(length(failed)>0){
-    essage('The following files failed to download likely due to bandwidth throttling. Please download them manually:\n',paste0(failed,collapse='\n'));
+    message('
+The following files failed to download likely due to bandwidth throttling.
+Please try waiting a few minutes and then re-running this script. Or you
+can download the below files manually to ',download_dir,'...
+
+',paste0(failed,collapse='\n'));
   } else save(sdohzip,file = 'data/SDOH_ZIP.rdata');
 } else sdohzip <- import('SDOH_ZIP.rdata');
 
@@ -103,6 +114,7 @@ sdohrsazip <- sdohzip[[sdohzipselected]] %>% inner_join(cx0) %>%
   rename(RSA=CN) %>%
   mutate(across(any_of(c('ZCTA','ZIPCODE')),~sprintf("'%s'",.x))) %>%
   inner_join(rsa0,by='RSA');
+
 sdohrsazip_oldnames <- rename(sdohrsazip,any_of(colmap));
 message(sprintf('Number of ZCTAs omitted from SDOH file: %s',length(setdiff(sprintf("'%s'",sdohzip[[sdohzipselected]]$ZCTA),sdohrsazip$ZCTA))));
 message(sprintf('Number of ZCTAs omitted from crosswalk file: %s',length(setdiff(sprintf("'%s'",cx0$ZCTA),c('XXXXX',sdohrsazip$ZCTA)))));
