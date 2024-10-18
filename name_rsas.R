@@ -95,13 +95,14 @@ automapper <- . %>% gsub('STAMP','STMP',.) %>% gsub('TOTAL','TOT',.) %>%
   gsub('OWNED','OWNER',.) %>% gsub('VA_','VET_',.) %>% gsub('POOR','POV',.) %>%
   gsub('^ACS_PCT_|_ZC$','',.);
 
+
 ruca <- import('https://www.ers.usda.gov/webdocs/DataFiles/53241/RUCA2010zipcode.xlsx?v=5559.8',which='Data') %>%
   transmute(ZIPCODE=ZIP_CODE,STATE,RUCA=as.character(RUCA1)
             ,RuralUrban=case_match(RUCA1
-                                   ,1:3 ~ 'Metropolitan'
-                                   ,4:6 ~ 'Micropolitan'
-                                   ,7:9 ~ 'Smalltown'
-                                   ,10 ~ 'Rural'
+                                   ,1:3 ~ 'Urban core'
+                                   ,4:6 ~ 'Suburban'
+                                   ,7:9 ~ 'Large rural'
+                                   ,10 ~ 'Small town/rural'
                                    ,99 ~ 'NC'));
 # rucadct <- import('https://www.ers.usda.gov/webdocs/DataFiles/53241/RUCA2010zipcode.xlsx?v=5559.8',which='RUCA code description',range='A1:A12')[,1] %>% gsub('^([0-9]*)\\s*','\\1=',.) %>% strsplit('=') %>% do.call(rbind,.) %>% data.frame %>% setNames(c('RUCA','description')) %>% mutate(description=trimws(description));
 cnt2metro <- import('https://www2.census.gov/programs-surveys/metro-micro/geographies/reference-files/2023/delineation-files/list1_2023.xlsx',skip=2) %>%
