@@ -215,7 +215,7 @@ cnlabels$labels_cn <- group_by(cx5,CN) %>% fn_final_labels();
 cnlabels$labels_zcta <- group_by(cx5,ZCTA) %>% fn_final_labels() %>%
   ungroup %>% dplyr::select(!matches('label|seqid')) %>%
   left_join(cnlabels$labels_cn[,c('CN','label0','label1')]);
-cnlabels$labels_zip <- group_by(cx5,ZIP) %>% fn_final_labels() %>%
+cnlabels$labels_zip <- group_by(cx5,ZIPCODE) %>% fn_final_labels() %>%
   ungroup %>% dplyr::select(!matches('label|seqid')) %>%
   left_join(cnlabels$labels_cn[,c('CN','label0','label1')]);
 
