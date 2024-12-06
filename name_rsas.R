@@ -29,6 +29,8 @@ library(DescTools);                              # some useful commands
 library(RCurl);
 #library(metamedian);                             # median-of-medians01
 library(stringdist);                             # to find closest matching names
+library(english);
+library(stringr);
 
 sdohzipselected <- 'https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_2018_ZIPCODE_1_0.xlsx';
 sdohzctaselected <- 'https://www.ahrq.gov/sites/default/files/wysiwyg/sdohchallenge/data/SDOH_ZCTA_2018.xlsx';
@@ -70,12 +72,19 @@ fn_automapper <- . %>% gsub('STAMP','STMP',.) %>% gsub('TOTAL','TOT',.) %>%
   gsub('_BELOW64','64',.) %>% gsub('CFHEORS','EORS',.);
 
 fn_zapambiguous <- function(xx) ifelse(xx>min(xx,na.rm=T),NA,xx);
+
+fn_replace_trailing_numbers <- function(xx) {
+  str_replace(xx, "\\b(\\d+)$", function(mm) as.character(str_to_title(english::english(as.numeric(mm)))))
+};
+
+
 # Import data ----
 
 #' Downloading and importing AHRQ ZCTA data (beta, deprecated)
 if(!all(file.exists(c('data/SDOH_ZCTA.rdata','data/SDOH_ZIP.rdata')))) system('R download_data.R',wait=T);
 sdohzcta <- import('data/SDOH_ZCTA.rdata');
 sdohzip <- import('data/SDOH_ZIP.rdata');
+rsa2cmsregion <- import('data/RSA2CMSregion.tsv');
 #sdohrsazip <- import(sprintf('data/RSA_SDOH_%s_ZIPCODE_1_0.csv',sdohyear));
 sdohrsazip <- sdohzip$`https://www.ahrq.gov/sites/default/files/wysiwyg/sdoh/SDOH_2020_ZIPCODE_1_0.xlsx` ;
 
@@ -221,15 +230,34 @@ cnlabels$labels_zip <- group_by(cx5,ZIPCODE) %>% fn_final_labels() %>%
 
 
 # duplication/uniqueness report
-sapply(cnlabels,function(xx) {
-  xx_augmented <- paste(xx,cnlabels$RuralUrban,cnlabels$Centrality,cnlabels$STATE);
-  c(multis=sum(grepl(';',xx)),multis2plus=sum(grepl(';.*;',xx))
-    ,na=sum(is.na(xx)),missing=sum(xx=='',na.rm = T)
-    ,nonmissing=sum(na.omit(xx!='')),nonmissing_unique=length(setdiff(na.omit(xx),''))
-    ,nondups=sum(!(duplicated(xx)|duplicated(xx,fromLast=T)))
-    ,aug_nondups=sum(!(duplicated(xx_augmented)|duplicated(xx_augmented,fromLast=T))))})
+# sapply(cnlabels,function(xx) {
+#   browser();
+#   xx_augmented <- with(xx,paste(RuralUrban,Centrality,STATE));
+#   c(multis=sum(grepl(';',xx)),multis2plus=sum(grepl(';.*;',xx))
+#     ,na=sum(is.na(xx)),missing=sum(xx=='',na.rm = T)
+#     ,nonmissing=sum(na.omit(xx!='')),nonmissing_unique=length(setdiff(na.omit(xx),''))
+#     ,nondups=sum(!(duplicated(xx)|duplicated(xx,fromLast=T)))
+#     ,aug_nondups=sum(!(duplicated(xx_augmented)|duplicated(xx_augmented,fromLast=T))))})
 
+# export rsa shared files ----
 export(cnlabels,file='data/RSA_labels.xlsx');
+
+rsa_xwalk_public <- ungroup(cnlabels$labels_zcta) %>%
+  transmute(RSA=CN,ZCTA,RSA_Name=fn_replace_trailing_numbers(label1)
+            ,prefix=str_extract(RSA,'^.')) %>% left_join(rsa2cmsregion) %>%
+  select(-prefix) %>%
+  arrange(RSA,ZCTA);
+
+rsa_rsr_public <- ungroup(cnlabels$labels_cn) %>%
+  transmute(RSA=CN,RSA_Name=fn_replace_trailing_numbers(label1)
+            ,prefix=str_extract(RSA,'^.')) %>%
+  left_join(rsa0) %>% select(-'RSA_bin') %>%
+  rename(Community_Discharge=RSR) %>%
+  left_join(rsa2cmsregion) %>% select(-prefix) %>%  arrange(RSA);
+
+export(rsa_xwalk_public,'rsa_xwalk_public.csv');
+export(rsa_rsr_public,'rsa_rsr_public.csv');
+
 
 # old2new name mapping ----
 # Old ZCTA column names to new ZIP column names
@@ -264,13 +292,13 @@ closestmatch <- stringdistmatrix(old2new$oldnames_std,newnames_unmatched_std) %>
   apply(1,fn_zapambiguous) %>% apply(1,fn_zapambiguous);
 closestmatch[,colSums(!is.na(closestmatch))>1] <- NA;
 closestmatch[rowSums(!is.na(closestmatch))>1,] <- NA;
-old2new$pass0 <- apply(closestmatch,1
-                       ,function(xx){
-                         if(all(is.na(xx))) NA else newnames_unmatched_std[!is.na(xx)]
-                         });
-
-  apply(1,function(xx) newnames_unmatched_std[which(xx==min(xx))]) %>%
-  setNames(old2new$oldnames_std);
+# old2new$pass0 <- apply(closestmatch,1
+#                        ,function(xx){
+#                          if(all(is.na(xx))) NA else newnames_unmatched_std[!is.na(xx)]
+#                          });
+#
+#   apply(1,function(xx) newnames_unmatched_std[which(xx==min(xx))]) %>%
+#   setNames(old2new$oldnames_std);
 closestsinglematch <- Filter(function(xx) length(xx)==1,closestmatch) %>% unlist;
 old2new$newnames_std <- closestsinglematch[old2new$oldnames_std];
 newnames_unmatched_std0 <- setdiff(newnames_unmatched_std,old2new$newnames_std);
